@@ -239,7 +239,9 @@ pub fn execute(
             machine.registers[x as usize] = byte;
         }
         Instruction::AddByte { x, byte } => {
-            machine.registers[x as usize] += byte;
+            let result = machine.registers[x as usize] as u16 + byte as u16;
+            machine.registers[x as usize] = (result & 0xFF) as u8;
+            machine.registers[0xF] = if result > 255 { 1 } else { 0 };
         }
         Instruction::Ld { x, y } => {
             machine.registers[x as usize] = machine.registers[y as usize];
@@ -256,35 +258,39 @@ pub fn execute(
         Instruction::Add { x, y } => {
             let result =
                 machine.registers[x as usize] as u16 + machine.registers[y as usize] as u16;
-            machine.registers[0xF] = if result > 255 { 1 } else { 0 };
             machine.registers[x as usize] = (result & 0xFF) as u8;
+            machine.registers[0xF] = if result > 255 { 1 } else { 0 };
         }
         Instruction::Sub { x, y } => {
-            machine.registers[0xF] =
-                if machine.registers[x as usize] > machine.registers[y as usize] {
-                    1
-                } else {
-                    0
-                };
-            machine.registers[x as usize] -= machine.registers[y as usize];
+            let carry = if machine.registers[x as usize] >= machine.registers[y as usize] {
+                1
+            } else {
+                0
+            };
+            let result = machine.registers[x as usize].wrapping_sub(machine.registers[y as usize]);
+
+            machine.registers[x as usize] = result;
+            machine.registers[0xF] = carry;
         }
         Instruction::Shr { x } => {
-            machine.registers[0xF] = machine.registers[x as usize] & 0x1;
+            let carry = machine.registers[x as usize] & 0x1;
             machine.registers[x as usize] = machine.registers[x as usize] >> 1;
+            machine.registers[0xF] = carry;
         }
         Instruction::Subn { x, y } => {
-            machine.registers[0xF] =
-                if machine.registers[y as usize] > machine.registers[x as usize] {
-                    1
-                } else {
-                    0
-                };
+            let carry = if machine.registers[y as usize] >= machine.registers[x as usize] {
+                1
+            } else {
+                0
+            };
             machine.registers[x as usize] =
-                machine.registers[y as usize] - machine.registers[x as usize];
+                machine.registers[y as usize].wrapping_sub(machine.registers[x as usize]);
+            machine.registers[0xF] = carry;
         }
         Instruction::Shl { x } => {
-            machine.registers[0xF] = machine.registers[x as usize] & 0x80;
+            let carry = (machine.registers[x as usize] >> 7) & 1;
             machine.registers[x as usize] = machine.registers[x as usize] << 1;
+            machine.registers[0xF] = carry;
         }
         Instruction::Sne { x, y } => {
             if machine.registers[x as usize] != machine.registers[y as usize] {
@@ -370,24 +376,26 @@ pub fn execute(
             machine.i = FONT_START_ADDRESS + (machine.registers[x as usize] * 5) as u16;
         }
         Instruction::LdB { x } => {
-            let hundreds = x / 100;
-            let tens = (x / 10) % 10;
-            let ones = x % 10;
+            let hundreds = machine.registers[x as usize] / 100;
+            let tens = (machine.registers[x as usize] / 10) % 10;
+            let ones = machine.registers[x as usize] % 10;
             let i = machine.i as usize;
             machine.memory[i] = hundreds;
             machine.memory[i + 1] = tens;
             machine.memory[i + 2] = ones;
         }
         Instruction::LdMemReg { x } => {
-            for reg in 0..x {
+            for reg in 0..=x {
                 let i = machine.i as usize;
-                machine.memory[i] = machine.registers[reg as usize];
+                machine.memory[i + reg as usize] = machine.registers[reg as usize];
             }
+            machine.i += x as u16 + 1;
         }
         Instruction::LdRegMem { x } => {
-            for reg in 0..x {
+            for reg in 0..=x {
                 machine.registers[reg as usize] = machine.memory[machine.i as usize + reg as usize];
             }
+            machine.i += x as u16 + 1;
         }
     }
 }

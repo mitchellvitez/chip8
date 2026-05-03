@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use crate::constant::*;
 use crate::instruction::{execute, RecentInstructions};
 use crate::keyboard::keycode_to_key;
-use crate::machine::Machine;
+use crate::machine::{load_default_rom, Machine};
 use crate::ui::{setup_ui, update_ui, Background, ErrorText};
 use bevy::prelude::*;
 use bevy::window::WindowMode;
@@ -30,16 +30,22 @@ fn main() {
         .insert_resource(RecentInstructions {
             recent_instructions: VecDeque::new(),
         })
-        .add_systems(Startup, setup_ui)
-        .add_systems(FixedUpdate, tick_timers)
+        .add_systems(Startup, (setup_ui, load_default_rom))
+        .add_systems(FixedUpdate, (tick_timers, update_ui))
         .add_systems(
             Update,
-            (execute, update_ui).run_if(in_state(SimState::Executing)),
+            // this is a bit silly, but a straightforward way to improve performance
+            // is to execute many (here, 20) times per update
+            // didn't bother, but you could run many more times or run a fixed number
+            // of times per FixedUpdate tick
+            (
+                execute, execute, execute, execute, execute, execute, execute, execute, execute,
+                execute, execute, execute, execute, execute, execute, execute, execute, execute,
+                execute, execute,
+            )
+                .run_if(in_state(SimState::Executing)),
         )
-        .add_systems(
-            Update,
-            (step, update_ui).run_if(in_state(SimState::Stepping)),
-        )
+        .add_systems(Update, step.run_if(in_state(SimState::Stepping)))
         .add_systems(
             Update,
             wait_for_key.run_if(in_state(SimState::WaitingForKey)),
@@ -79,9 +85,9 @@ fn handle_error(
 #[derive(States, Default, Hash, Clone, Eq, PartialEq, Debug)]
 enum SimState {
     #[default]
-    Stepping,
-    // AwaitingRom, // TODO: add a ROM picker in the actual UI, and show which rom is running
     Executing,
+    // AwaitingRom, // TODO: add a ROM picker in the actual UI, and show which rom is running
+    Stepping,
     WaitingForKey,
     Errored,
 }
@@ -105,8 +111,6 @@ fn tick_timers(mut machine: ResMut<Machine>) {
         machine.st -= 1
     }
 }
-
-// TODO: run Timendus' chip8 test suite
 
 // TODO: load ROM data into the RAM starting at 0x200. another state `AwaitingRom` before starting
 // `Executing`? maybe the L key can open a file picker even?

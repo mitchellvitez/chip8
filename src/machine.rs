@@ -2,6 +2,7 @@ use crate::constant::*;
 use crate::keyboard::key_sprite;
 use bevy::prelude::*;
 use std::fs;
+use std::path::Path;
 
 #[derive(Resource)]
 pub struct Machine {
@@ -27,6 +28,29 @@ pub struct Machine {
     pub cycles: u32,
 }
 
+pub fn load_default_rom(mut machine: ResMut<Machine>) {
+    let rom = fs::read("roms/bowling.ch8").expect("failed to read ROM file");
+    machine.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
+        .copy_from_slice(&rom);
+}
+
+impl Machine {
+    fn reset(&mut self) {
+        *self = Self::default()
+    }
+
+    // TODO: ability to load ROM files on demand
+    // pub fn load_rom(&mut self, path: Path) {
+    //     self.reset();
+    //     // copy ROM into RAM
+    //     // TODO: convert `expect` into `fatal_error`
+    //     // TODO: if ROM too large to fit in RAM, enter error state
+    //     let rom = fs::read(path).expect("failed to read ROM file");
+    //     self.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
+    //         .copy_from_slice(&rom);
+    // }
+}
+
 impl Default for Machine {
     fn default() -> Self {
         let mut machine = Machine {
@@ -49,13 +73,6 @@ impl Default for Machine {
                 machine.memory[offset..offset + 5].copy_from_slice(&sprite);
             }
         }
-
-        // copy ROM into RAM
-        // TODO: convert `expect` into `fatal_error`
-        // TODO: if ROM too large to fit in RAM, enter error state
-        let rom = fs::read("roms/maze.ch8").expect("failed to read ROM file");
-        machine.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
-            .copy_from_slice(&rom);
 
         machine
     }

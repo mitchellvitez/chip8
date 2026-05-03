@@ -113,10 +113,10 @@ pub fn update_ui(
     if let Ok(mut text) = text_queries.p1().single_mut() {
         **text = match **state {
             SimState::Stepping => {
-                format!("single step\n\npress [P] for real time\npress [SPACE] to step")
+                format!("single step\n\npress [P] for continuous\npress [SPACE] to step")
             }
             SimState::Executing => {
-                format!("real time\n\npress [P] for single step\n")
+                format!("continuous\n\npress [P] for single step\n")
             }
             SimState::Errored => {
                 format!("encountered fatal error\n\n\n")
