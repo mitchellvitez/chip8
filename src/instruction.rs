@@ -166,6 +166,10 @@ pub fn execute(
     mut commands: Commands,
     mut queue: ResMut<RecentInstructions>,
 ) {
+    if keys.just_pressed(KeyCode::KeyP) {
+        next_state.set(SimState::Stepping);
+    }
+
     if machine.pc as usize >= RAM_SIZE {
         fatal_error(
             next_state,
@@ -188,6 +192,7 @@ pub fn execute(
         return;
     };
 
+    machine.cycles += 1;
     machine.pc += 2;
 
     queue

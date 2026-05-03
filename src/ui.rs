@@ -1,6 +1,6 @@
-use crate::constant::*;
 use crate::instruction::RecentInstructions;
 use crate::machine::Machine;
+use crate::{constant::*, SimState};
 use bevy::asset::RenderAssetUsages;
 use bevy::image::ImageSampler;
 use bevy::prelude::*;
@@ -14,6 +14,24 @@ pub struct Background;
 
 #[derive(Component)]
 pub struct RecentInstructionsMarker;
+
+#[derive(Component)]
+pub struct ExecutionModeMarker;
+
+#[derive(Component)]
+pub struct CyclesMarker;
+
+#[derive(Component)]
+pub struct RegistersMarker;
+
+#[derive(Component)]
+pub struct TimersMarker;
+
+#[derive(Component)]
+pub struct PseudoRegistersMarker;
+
+#[derive(Component)]
+pub struct StackMarker;
 
 #[derive(Resource, Default)]
 pub struct Display {
@@ -31,7 +49,16 @@ pub fn update_ui(
     display: Res<Display>,
     ram_visualizer: Res<RamVisualizer>,
     recent_instructions_queue: Res<RecentInstructions>,
-    mut recent_instructions_text: Query<&mut Text, With<RecentInstructionsMarker>>,
+    mut text_queries: ParamSet<(
+        Query<&mut Text, With<RecentInstructionsMarker>>,
+        Query<&mut Text, With<ExecutionModeMarker>>,
+        Query<&mut Text, With<CyclesMarker>>,
+        Query<&mut Text, With<RegistersMarker>>,
+        Query<&mut Text, With<StackMarker>>,
+        Query<&mut Text, With<TimersMarker>>,
+        Query<&mut Text, With<PseudoRegistersMarker>>,
+    )>,
+    state: Res<State<SimState>>,
 ) {
     if !machine.is_changed() {
         return;
@@ -73,7 +100,7 @@ pub fn update_ui(
         pixel.copy_from_slice(pixel_color);
     }
 
-    if let Ok(mut text) = recent_instructions_text.single_mut() {
+    if let Ok(mut text) = text_queries.p0().single_mut() {
         let message = recent_instructions_queue
             .recent_instructions
             .iter()
@@ -81,6 +108,53 @@ pub fn update_ui(
             .collect::<Vec<_>>()
             .join("\n");
         **text = format!("{}", message);
+    }
+
+    if let Ok(mut text) = text_queries.p1().single_mut() {
+        **text = match **state {
+            SimState::Stepping => {
+                format!("single step\n\npress [P] for real time\npress [SPACE] to step")
+            }
+            SimState::Executing => {
+                format!("real time\n\npress [P] for single step\n")
+            }
+            SimState::Errored => {
+                format!("encountered fatal error\n\n\n")
+            }
+            SimState::WaitingForKey => {
+                format!("waiting for keyboard input\n\n\n")
+            }
+        };
+    }
+
+    if let Ok(mut text) = text_queries.p2().single_mut() {
+        **text = format!("{}", machine.cycles);
+    }
+
+    if let Ok(mut text) = text_queries.p3().single_mut() {
+        let mut s = String::new();
+        for (i, &v) in machine.registers.iter().enumerate() {
+            s.push_str(&format!("V{:X}=0x{:02X}\n", i, v));
+        }
+        s.push_str(&format!("\nI=0x{:03X}", machine.i));
+        **text = s;
+    }
+
+    if let Ok(mut text) = text_queries.p4().single_mut() {
+        let mut s = String::new();
+        for v in machine.stack.iter().rev() {
+            s.push_str(&format!("0x{:03X}\n", v));
+        }
+        s.push_str(&format!("\nSP=0x{:01X}", machine.sp));
+        **text = s;
+    }
+
+    if let Ok(mut text) = text_queries.p5().single_mut() {
+        **text = format!("DT=0x{:02X}\nST=0x{:02X}", machine.dt, machine.st);
+    }
+
+    if let Ok(mut text) = text_queries.p6().single_mut() {
+        **text = format!("PC=0x{:03X}\n ", machine.pc);
     }
 }
 
@@ -287,17 +361,264 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                             Node {
                                 width: Val::Percent(33.0),
                                 border_radius: BorderRadius::all(Val::Px(8.0)),
+                                flex_direction: FlexDirection::Column,
                                 ..default()
                             },
                             BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
                         ))
                         .with_children(|parent| {
+                            parent
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    ..default()
+                                })
+                                .with_children(|parent| {
+                                    parent
+                                        .spawn(Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(50.0),
+                                            ..default()
+                                        })
+                                        .with_children(|parent| {
+                                            // execution mode
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("Execution Mode"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                            ));
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new(""),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                                ExecutionModeMarker,
+                                            ));
+                                        });
+
+                                    parent
+                                        .spawn(Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(50.0),
+                                            ..default()
+                                        })
+                                        .with_children(|parent| {
+                                            // cycles
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("Cycles"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                            ));
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new(""),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                                CyclesMarker,
+                                            ));
+                                        });
+                                });
+
+                            // registers alongside stack
+                            parent
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    ..default()
+                                })
+                                .with_children(|parent| {
+                                    parent
+                                        .spawn(Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(50.0),
+                                            ..default()
+                                        })
+                                        .with_children(|parent| {
+                                            // registers
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("Registers"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                            ));
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new(""),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                                RegistersMarker,
+                                            ));
+                                        });
+
+                                    parent
+                                        .spawn(Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(50.0),
+                                            ..default()
+                                        })
+                                        .with_children(|parent| {
+                                            // stack
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("Stack"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                            ));
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new(""),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                                StackMarker,
+                                            ));
+                                        });
+                                });
+
+                            // timers alongside pseudo-registers
+                            parent
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Row,
+                                    ..default()
+                                })
+                                .with_children(|parent| {
+                                    parent
+                                        .spawn(Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(50.0),
+                                            ..default()
+                                        })
+                                        .with_children(|parent| {
+                                            // registers
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("Timers"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                            ));
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new(""),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                                TimersMarker,
+                                            ));
+                                        });
+
+                                    parent
+                                        .spawn(Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(50.0),
+                                            ..default()
+                                        })
+                                        .with_children(|parent| {
+                                            // stack
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("Pseudo-registers"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                            ));
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0))
+                                                        .with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new(""),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                                PseudoRegistersMarker,
+                                            ));
+                                        });
+                                });
+
+                            // recent instructions
                             parent.spawn((
                                 Node {
                                     margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
                                     ..default()
                                 },
-                                Text::new("Recent Instructions"),
+                                Text::new("Instructions"),
                                 TextFont {
                                     font_size: 16.0,
                                     ..default()
@@ -316,6 +637,32 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                                 },
                                 TextColor(Color::srgb(0.5, 0.5, 0.5)),
                                 RecentInstructionsMarker,
+                            ));
+
+                            // keyboard
+                            parent.spawn((
+                                Node {
+                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                    ..default()
+                                },
+                                Text::new("Key Map"),
+                                TextFont {
+                                    font_size: 16.0,
+                                    ..default()
+                                },
+                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                            ));
+                            parent.spawn((
+                                Node {
+                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                    ..default()
+                                },
+                                Text::new("chip-8    qwerty\n1 2 3 C   1 2 3 4\n4 5 6 D   Q W E R\n7 8 9 E   A S D F\nA 0 B F   Z X C V"),
+                                TextFont {
+                                    font_size: 16.0,
+                                    ..default()
+                                },
+                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
                             ));
                         });
                 });

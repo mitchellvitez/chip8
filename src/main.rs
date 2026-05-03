@@ -38,10 +38,29 @@ fn main() {
         )
         .add_systems(
             Update,
+            (step, update_ui).run_if(in_state(SimState::Stepping)),
+        )
+        .add_systems(
+            Update,
             wait_for_key.run_if(in_state(SimState::WaitingForKey)),
         )
         .add_systems(OnEnter(SimState::Errored), handle_error)
         .run();
+}
+
+fn step(
+    keys: Res<ButtonInput<KeyCode>>,
+    machine: ResMut<Machine>,
+    mut next_state: ResMut<NextState<SimState>>,
+    commands: Commands,
+    queue: ResMut<RecentInstructions>,
+) {
+    if keys.just_pressed(KeyCode::KeyP) {
+        next_state.set(SimState::Executing);
+    }
+    if keys.just_pressed(KeyCode::Space) {
+        execute(keys, machine, next_state, commands, queue);
+    }
 }
 
 fn handle_error(
@@ -60,9 +79,9 @@ fn handle_error(
 #[derive(States, Default, Hash, Clone, Eq, PartialEq, Debug)]
 enum SimState {
     #[default]
+    Stepping,
     // AwaitingRom, // TODO: add a ROM picker in the actual UI, and show which rom is running
     Executing,
-    // Stepping // TODO: add stepped execution (press space key to step). toggle this mode with the P key
     WaitingForKey,
     Errored,
 }
@@ -77,9 +96,6 @@ struct FatalError {
     message: String,
 }
 
-// TODO: add option to either execute as fast as possible, or step through execution (press space
-// bar), and option to pause execution with P key.
-
 // TODO: play sound while st is non-zero
 fn tick_timers(mut machine: ResMut<Machine>) {
     if machine.dt > 0 {
@@ -90,47 +106,7 @@ fn tick_timers(mut machine: ResMut<Machine>) {
     }
 }
 
-// TODO: include a diagram of the keyboard layout / mapping to qwerty
-
 // TODO: run Timendus' chip8 test suite
-
-// TODO: visualize all registers
-// VO-VF=0xFF (16 of them)
-// I=0xFFF (12 bits only)
-// DT=0xFF (1 byte)
-// ST=0xFF
-// PC=0xFFF (12 bits)
-// SP=0xF (4 bits)
-// Stack (should grow and shrink, only show stack pointers that exist) up to 16 of them.
-//
-// stack should be grayed out if zero
-//
-// -------------------
-//
-// registers   stack
-//  V0=0xFF      .
-//  V1=0xFF      (16)
-//    .          .
-//    .          .
-//    (16)      0x0
-//    .         0xFFF
-//
-//  I=0xFFF   SP=0xF
-//  -------------------
-//   timers   pseudo-registers
-//   DT=0xFF    PC=0xFFF
-//   ST=0xFF    SP=0xF
-//
-//   -----------------------
-//   instructions (most recent 8, bottom one white with others above grayed out a bit)
-//   ADD V1 V2
-//   CLS
-//   .
-//   .
-//   .
-//   NOP
-//   DRW ...
-//   LD F, V5
 
 // TODO: load ROM data into the RAM starting at 0x200. another state `AwaitingRom` before starting
 // `Executing`? maybe the L key can open a file picker even?

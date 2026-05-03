@@ -23,6 +23,8 @@ pub struct Machine {
     pub memory: Box<[u8; RAM_SIZE]>,
     /// monochrome display
     pub display: [bool; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+    /// number of cycles since the machine started
+    pub cycles: u32,
 }
 
 impl Default for Machine {
@@ -37,6 +39,7 @@ impl Default for Machine {
             stack: [0; STACK_SIZE],
             memory: Box::new([0; RAM_SIZE]),
             display: [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+            cycles: 0,
         };
 
         // fill specified bytes of memory with the hex digit "font"
@@ -50,7 +53,7 @@ impl Default for Machine {
         // copy ROM into RAM
         // TODO: convert `expect` into `fatal_error`
         // TODO: if ROM too large to fit in RAM, enter error state
-        let rom = fs::read("roms/ibmlogo.ch8").expect("failed to read ROM file");
+        let rom = fs::read("roms/maze.ch8").expect("failed to read ROM file");
         machine.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
             .copy_from_slice(&rom);
 
