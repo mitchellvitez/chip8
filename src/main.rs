@@ -31,12 +31,13 @@ fn main() {
             recent_instructions: VecDeque::new(),
         })
         .add_systems(Startup, (setup_ui, load_default_rom))
-        .add_systems(FixedUpdate, (tick_timers, update_ui))
+        .add_systems(FixedUpdate, tick_timers)
+        .add_systems(Update, update_ui)
         .add_systems(
             Update,
             // this is a bit silly, but a straightforward way to improve performance
-            // is to execute many (here, 20) times per update
-            // didn't bother, but you could run many more times or run a fixed number
+            // is to execute many (here, 20) instructions per Update
+            // didn't bother, but you could execute many more times or run a fixed number
             // of times per FixedUpdate tick
             (
                 execute, execute, execute, execute, execute, execute, execute, execute, execute,

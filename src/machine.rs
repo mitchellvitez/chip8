@@ -29,7 +29,7 @@ pub struct Machine {
 }
 
 pub fn load_default_rom(mut machine: ResMut<Machine>) {
-    let rom = fs::read("roms/bowling.ch8").expect("failed to read ROM file");
+    let rom = fs::read("roms/startup.ch8").expect("failed to read ROM file");
     machine.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
         .copy_from_slice(&rom);
 }
@@ -67,7 +67,7 @@ impl Default for Machine {
         };
 
         // fill specified bytes of memory with the hex digit "font"
-        for i in 0x0..0xF {
+        for i in 0x0..=0xF {
             if let Some(sprite) = key_sprite(i as u8) {
                 let offset = (FONT_START_ADDRESS + i * 5) as usize;
                 machine.memory[offset..offset + 5].copy_from_slice(&sprite);

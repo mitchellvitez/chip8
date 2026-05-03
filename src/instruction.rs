@@ -209,7 +209,13 @@ pub fn execute(
             machine.sp -= 1;
         }
         // Instruction::Sys { .. } => {} // no-op
-        Instruction::Jp { addr } => machine.pc = addr,
+        Instruction::Jp { addr } => {
+            if machine.pc - 2 == addr {
+                // infinite loop, likely intentional at the end of a program
+                next_state.set(SimState::Stepping);
+            }
+            machine.pc = addr
+        }
         Instruction::Call { addr } => {
             machine.sp += 1;
             if machine.sp >= 16 {
