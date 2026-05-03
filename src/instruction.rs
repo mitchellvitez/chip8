@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use crate::keyboard::key_to_keycode;
 use crate::machine::Machine;
 use crate::FatalError;
@@ -43,6 +45,11 @@ enum Instruction {
     LdB { x: u8 },
     LdMemReg { x: u8 },
     LdRegMem { x: u8 },
+}
+
+#[derive(Resource)]
+pub struct RecentInstructions {
+    pub recent_instructions: VecDeque<String>,
 }
 
 /// parses raw binary to instruction datatype
@@ -157,6 +164,7 @@ pub fn execute(
     mut machine: ResMut<Machine>,
     mut next_state: ResMut<NextState<SimState>>,
     mut commands: Commands,
+    mut queue: ResMut<RecentInstructions>,
 ) {
     if machine.pc as usize >= RAM_SIZE {
         fatal_error(
@@ -181,9 +189,14 @@ pub fn execute(
     };
 
     machine.pc += 2;
-    // TODO: instead put these printouts into a queue Resource with max size 8 (or 16 or whatever
-    // fits nicely)
-    println!("{}", instruction_to_string(instruction));
+
+    queue
+        .recent_instructions
+        .push_back(instruction_to_string(instruction));
+    while queue.recent_instructions.len() > 8 {
+        queue.recent_instructions.pop_front();
+    }
+
     match instruction {
         Instruction::Cls => machine.display = [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
         Instruction::Ret => {

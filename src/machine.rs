@@ -50,7 +50,7 @@ impl Default for Machine {
         // copy ROM into RAM
         // TODO: convert `expect` into `fatal_error`
         // TODO: if ROM too large to fit in RAM, enter error state
-        let rom = fs::read("roms/maze.ch8").expect("failed to read ROM file");
+        let rom = fs::read("roms/ibmlogo.ch8").expect("failed to read ROM file");
         machine.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
             .copy_from_slice(&rom);
 

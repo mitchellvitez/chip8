@@ -1,4 +1,5 @@
 use crate::constant::*;
+use crate::instruction::RecentInstructions;
 use crate::machine::Machine;
 use bevy::asset::RenderAssetUsages;
 use bevy::image::ImageSampler;
@@ -10,6 +11,9 @@ pub struct ErrorText;
 
 #[derive(Component)]
 pub struct Background;
+
+#[derive(Component)]
+pub struct RecentInstructionsMarker;
 
 #[derive(Resource, Default)]
 pub struct Display {
@@ -26,6 +30,8 @@ pub fn update_ui(
     mut images: ResMut<Assets<Image>>,
     display: Res<Display>,
     ram_visualizer: Res<RamVisualizer>,
+    recent_instructions_queue: Res<RecentInstructions>,
+    mut recent_instructions_text: Query<&mut Text, With<RecentInstructionsMarker>>,
 ) {
     if !machine.is_changed() {
         return;
@@ -65,6 +71,16 @@ pub fn update_ui(
             &[r, g, b, 255]
         };
         pixel.copy_from_slice(pixel_color);
+    }
+
+    if let Ok(mut text) = recent_instructions_text.single_mut() {
+        let message = recent_instructions_queue
+            .recent_instructions
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n");
+        **text = format!("{}", message);
     }
 }
 
@@ -266,14 +282,42 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                         });
 
                     // right side panel
-                    parent.spawn((
-                        Node {
-                            width: Val::Percent(33.0),
-                            border_radius: BorderRadius::all(Val::Px(8.0)),
-                            ..default()
-                        },
-                        BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
-                    ));
+                    parent
+                        .spawn((
+                            Node {
+                                width: Val::Percent(33.0),
+                                border_radius: BorderRadius::all(Val::Px(8.0)),
+                                ..default()
+                            },
+                            BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
+                        ))
+                        .with_children(|parent| {
+                            parent.spawn((
+                                Node {
+                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                    ..default()
+                                },
+                                Text::new("Recent Instructions"),
+                                TextFont {
+                                    font_size: 16.0,
+                                    ..default()
+                                },
+                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                            ));
+                            parent.spawn((
+                                Node {
+                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                    ..default()
+                                },
+                                Text::new(""),
+                                TextFont {
+                                    font_size: 16.0,
+                                    ..default()
+                                },
+                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                RecentInstructionsMarker,
+                            ));
+                        });
                 });
         });
 }

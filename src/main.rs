@@ -1,5 +1,7 @@
+use std::collections::VecDeque;
+
 use crate::constant::*;
-use crate::instruction::execute;
+use crate::instruction::{execute, RecentInstructions};
 use crate::keyboard::keycode_to_key;
 use crate::machine::Machine;
 use crate::ui::{setup_ui, update_ui, Background, ErrorText};
@@ -25,6 +27,9 @@ fn main() {
         .insert_resource(Time::<Fixed>::from_hz(60.0))
         .insert_resource(Machine::default())
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(RecentInstructions {
+            recent_instructions: VecDeque::new(),
+        })
         .add_systems(Startup, setup_ui)
         .add_systems(FixedUpdate, tick_timers)
         .add_systems(
