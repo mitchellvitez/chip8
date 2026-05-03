@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 
+use crate::audio::setup_audio;
 use crate::constant::*;
 use crate::instruction::{execute, RecentInstructions};
 use crate::keyboard::keycode_to_key;
@@ -8,6 +9,7 @@ use crate::ui::{setup_ui, update_ui, Background, ErrorText};
 use bevy::prelude::*;
 use bevy::window::WindowMode;
 
+mod audio;
 mod constant;
 mod instruction;
 mod keyboard;
@@ -30,7 +32,7 @@ fn main() {
         .insert_resource(RecentInstructions {
             recent_instructions: VecDeque::new(),
         })
-        .add_systems(Startup, (setup_ui, load_default_rom))
+        .add_systems(Startup, (setup_ui, setup_audio, load_default_rom))
         .add_systems(FixedUpdate, tick_timers)
         .add_systems(Update, update_ui)
         .add_systems(
@@ -103,13 +105,19 @@ struct FatalError {
     message: String,
 }
 
-// TODO: play sound while st is non-zero
-fn tick_timers(mut machine: ResMut<Machine>) {
+fn tick_timers(mut machine: ResMut<Machine>, mut audio: Query<&AudioSink>) {
     if machine.dt > 0 {
         machine.dt -= 1
     }
+
+    let Ok(audio) = audio.single_mut() else {
+        return;
+    };
     if machine.st > 0 {
-        machine.st -= 1
+        machine.st -= 1;
+        audio.play();
+    } else {
+        audio.pause();
     }
 }
 
