@@ -64,9 +64,9 @@ fn decode(opcode: u16) -> Option<Instruction> {
     let addr = opcode & 0x0FFF;
     // `byte` is also called `kk` in the spec. prefer `byte`.
     let byte = (opcode & 0x00FF) as u8;
-    let x = nibbles.1 as u8;
-    let y = nibbles.2 as u8;
-    let n = nibbles.3 as u8;
+    let x = nibbles.1;
+    let y = nibbles.2;
+    let n = nibbles.3;
 
     match nibbles {
         (0x0, 0x0, 0xE, 0x0) => Some(Instruction::Cls),
@@ -281,7 +281,7 @@ pub fn execute(
         }
         Instruction::Shr { x } => {
             let carry = machine.registers[x as usize] & 0x1;
-            machine.registers[x as usize] = machine.registers[x as usize] >> 1;
+            machine.registers[x as usize] >>= 1;
             machine.registers[0xF] = carry;
         }
         Instruction::Subn { x, y } => {
@@ -296,7 +296,7 @@ pub fn execute(
         }
         Instruction::Shl { x } => {
             let carry = (machine.registers[x as usize] >> 7) & 1;
-            machine.registers[x as usize] = machine.registers[x as usize] << 1;
+            machine.registers[x as usize] <<= 1;
             machine.registers[0xF] = carry;
         }
         Instruction::Sne { x, y } => {
@@ -343,17 +343,17 @@ pub fn execute(
             }
         }
         Instruction::Skp { x } => {
-            if let Some(keycode) = key_to_keycode(machine.registers[x as usize]) {
-                if keys.pressed(keycode) {
-                    machine.pc += 2
-                }
+            if let Some(keycode) = key_to_keycode(machine.registers[x as usize])
+                && keys.pressed(keycode)
+            {
+                machine.pc += 2
             }
         }
         Instruction::Sknp { x } => {
-            if let Some(keycode) = key_to_keycode(machine.registers[x as usize]) {
-                if !keys.pressed(keycode) {
-                    machine.pc += 2
-                }
+            if let Some(keycode) = key_to_keycode(machine.registers[x as usize])
+                && !keys.pressed(keycode)
+            {
+                machine.pc += 2
             }
         }
         Instruction::LdVxDt { x } => {

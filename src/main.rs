@@ -89,7 +89,6 @@ fn handle_error(
 enum SimState {
     #[default]
     Executing,
-    // AwaitingRom, // TODO: add a ROM picker in the actual UI, and show which rom is running
     Stepping,
     WaitingForKey,
     Errored,
@@ -120,9 +119,6 @@ fn tick_timers(mut machine: ResMut<Machine>, mut audio: Query<&AudioSink>) {
         audio.pause();
     }
 }
-
-// TODO: load ROM data into the RAM starting at 0x200. another state `AwaitingRom` before starting
-// `Executing`? maybe the L key can open a file picker even?
 
 /// halts normal execution until a new keyboard input comes in
 fn wait_for_key(

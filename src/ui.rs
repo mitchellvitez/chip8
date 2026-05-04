@@ -52,6 +52,7 @@ pub struct RamVisualizer {
     pub handle: Handle<Image>,
 }
 
+#[allow(clippy::type_complexity)]
 pub fn update_ui(
     machine: Res<Machine>,
     mut images: ResMut<Assets<Image>>,
@@ -116,23 +117,17 @@ pub fn update_ui(
             .cloned()
             .collect::<Vec<_>>()
             .join("\n");
-        **text = format!("{}", message);
+        **text = message;
     }
 
     if let Ok(mut text) = text_queries.p1().single_mut() {
         **text = match **state {
             SimState::Stepping => {
-                format!("single step\n\npress [P] for continuous\npress [SPACE] to step")
+                "single step\n\npress [P] for continuous\npress [SPACE] to step".to_string()
             }
-            SimState::Executing => {
-                format!("continuous\n\npress [P] for single step\n")
-            }
-            SimState::Errored => {
-                format!("encountered fatal error\n\n\n")
-            }
-            SimState::WaitingForKey => {
-                format!("waiting for keyboard input\n\n\n")
-            }
+            SimState::Executing => "continuous\n\npress [P] for single step\n".to_string(),
+            SimState::Errored => "encountered fatal error\n\n\n".to_string(),
+            SimState::WaitingForKey => "waiting for keyboard input\n\n\n".to_string(),
         };
     }
 
@@ -432,7 +427,7 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                                     {
                                         machine.load_rom(path.clone());
                                         if let Ok(mut text) = rom_name.single_mut() {
-                                            **text = format!("{}", path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown"));
+                                            **text = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
                                         }
                                         if state.get() == &SimState::WaitingForKey {
                                             next_state.set(SimState::Executing);

@@ -109,16 +109,16 @@ pub fn key_sprite(key: u8) -> Option<[u8; 5]> {
 
 // for testing the font design
 fn _print_key_sprites() {
-    for i in 0 as u8..16 {
+    for i in 0..16 {
         if let Some(bytes) = key_sprite(i) {
             for byte in bytes {
                 for i in 0..4 {
                     let bit = ((byte << i) & 0b10000000) != 0;
                     print!("{}", if bit { "\u{2588}" } else { " " });
                 }
-                println!("");
+                println!();
             }
-            println!("");
+            println!();
         }
     }
 }
