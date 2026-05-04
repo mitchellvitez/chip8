@@ -2,10 +2,10 @@ use std::collections::VecDeque;
 
 use crate::audio::setup_audio;
 use crate::constant::*;
-use crate::instruction::{execute, RecentInstructions};
+use crate::instruction::{RecentInstructions, execute};
 use crate::keyboard::keycode_to_key;
-use crate::machine::{load_default_rom, Machine};
-use crate::ui::{setup_ui, update_ui, Background, ErrorText};
+use crate::machine::{Machine, load_default_rom};
+use crate::ui::{Background, ErrorText, setup_ui, update_ui};
 use bevy::prelude::*;
 use bevy::window::WindowMode;
 

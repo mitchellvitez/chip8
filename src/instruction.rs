@@ -1,10 +1,10 @@
 use std::collections::VecDeque;
 
-use crate::keyboard::key_to_keycode;
-use crate::machine::Machine;
 use crate::FatalError;
 use crate::SimState;
-use crate::{constant::*, RegisterAwaitingKeyInput};
+use crate::keyboard::key_to_keycode;
+use crate::machine::Machine;
+use crate::{RegisterAwaitingKeyInput, constant::*};
 use bevy::prelude::*;
 use rand::random;
 
@@ -212,7 +212,8 @@ pub fn execute(
         Instruction::Jp { addr } => {
             if machine.pc - 2 == addr {
                 // infinite loop, likely intentional at the end of a program
-                next_state.set(SimState::Stepping);
+                // uncomment the next line to pause execution in this case
+                // next_state.set(SimState::Stepping);
             }
             machine.pc = addr
         }

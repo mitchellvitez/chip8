@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 bevy = { version = "0.18", features = ["file_watcher", "dynamic_linking", "bevy_debug_stepping", "wav"] }
 rand = "0.9"
+rfd = "0.15"

@@ -2,7 +2,7 @@ use crate::constant::*;
 use crate::keyboard::key_sprite;
 use bevy::prelude::*;
 use std::fs;
-use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Resource)]
 pub struct Machine {
@@ -39,16 +39,14 @@ impl Machine {
         *self = Self::default()
     }
 
-    // TODO: ability to load ROM files on demand
-    // pub fn load_rom(&mut self, path: Path) {
-    //     self.reset();
-    //     // copy ROM into RAM
-    //     // TODO: convert `expect` into `fatal_error`
-    //     // TODO: if ROM too large to fit in RAM, enter error state
-    //     let rom = fs::read(path).expect("failed to read ROM file");
-    //     self.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
-    //         .copy_from_slice(&rom);
-    // }
+    pub fn load_rom(&mut self, path: PathBuf) {
+        self.reset();
+        // TODO: convert `expect` into `fatal_error`
+        // TODO: if ROM too large to fit in RAM, enter error state
+        let rom = fs::read(path).expect("failed to read ROM file");
+        self.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
+            .copy_from_slice(&rom);
+    }
 }
 
 impl Default for Machine {

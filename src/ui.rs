@@ -1,10 +1,13 @@
 use crate::instruction::RecentInstructions;
 use crate::machine::Machine;
-use crate::{constant::*, SimState};
+use crate::{SimState, constant::*};
 use bevy::asset::RenderAssetUsages;
+use bevy::ecs::observer::On;
 use bevy::image::ImageSampler;
+use bevy::picking::prelude::*;
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
+use rfd::FileDialog;
 
 #[derive(Component)]
 pub struct ErrorText;
@@ -32,6 +35,12 @@ pub struct PseudoRegistersMarker;
 
 #[derive(Component)]
 pub struct StackMarker;
+
+#[derive(Component)]
+pub struct CurrentRomMarker;
+
+#[derive(Component)]
+struct OpenRomButton;
 
 #[derive(Resource, Default)]
 pub struct Display {
@@ -362,11 +371,75 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                                 width: Val::Percent(33.0),
                                 border_radius: BorderRadius::all(Val::Px(8.0)),
                                 flex_direction: FlexDirection::Column,
+                                row_gap: Val::Px(16.0),
                                 ..default()
                             },
                             BackgroundColor(Color::srgb(0.1, 0.1, 0.1)),
                         ))
                         .with_children(|parent| {
+                            parent.spawn(Node {
+                                row_gap: Val::Px(0.0),
+                                flex_direction: FlexDirection::Column,
+                                ..default()
+                            }).with_children(|parent| {
+                                parent.spawn((
+                                    Node {
+                                        margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                        ..default()
+                                    },
+                                    Text::new("Current ROM"),
+                                    TextFont {
+                                        font_size: 16.0,
+                                        ..default()
+                                    },
+                                    TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                ));
+                                parent.spawn((
+                                    Node {
+                                        margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                        ..default()
+                                    },
+                                    Text::new("startup.ch8"),
+                                    TextFont {
+                                        font_size: 16.0,
+                                        ..default()
+                                    },
+                                    TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                    CurrentRomMarker,
+                                ));
+                                parent.spawn((
+                                    Button,
+                                    OpenRomButton,
+                                    Node {
+                                        padding: UiRect::all(Val::Px(12.0)),
+                                        margin: UiRect::all(Val::Px(12.0)),
+                                        border_radius: BorderRadius::all(Val::Px(12.0)),
+                                        ..default()
+                                    },
+                                    BackgroundColor(Color::srgb(0.0, 0.2, 0.4)),
+                                )).with_child((Text::new("Click to Open ROM"),
+                                    TextFont {
+                                        font_size: 16.0,
+                                        ..default()
+                                    },
+                                ))
+                                    .observe(|_trigger: On<Pointer<Click>>, mut machine: ResMut<Machine>, mut rom_name: Query<&mut Text, With<CurrentRomMarker>>,     state: Res<State<SimState>>,  mut next_state: ResMut<NextState<SimState>>
+
+    | {
+                                    if let Some(path) = FileDialog::new()
+                                        .add_filter("ROM", &["ch8", "rom"])
+                                        .pick_file()
+                                    {
+                                        machine.load_rom(path.clone());
+                                        if let Ok(mut text) = rom_name.single_mut() {
+                                            **text = format!("{}", path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown"));
+                                        }
+                                        if state.get() == &SimState::WaitingForKey {
+                                            next_state.set(SimState::Executing);
+                                        }
+                                    }
+                                });
+                                });
                             parent
                                 .spawn(Node {
                                     flex_direction: FlexDirection::Row,
@@ -613,57 +686,80 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                                 });
 
                             // recent instructions
-                            parent.spawn((
-                                Node {
-                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                            parent
+                                .spawn(Node {
+                                    flex_direction: FlexDirection::Row,
                                     ..default()
-                                },
-                                Text::new("Instructions"),
-                                TextFont {
-                                    font_size: 16.0,
-                                    ..default()
-                                },
-                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
-                            ));
-                            parent.spawn((
-                                Node {
-                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
-                                    ..default()
-                                },
-                                Text::new(""),
-                                TextFont {
-                                    font_size: 16.0,
-                                    ..default()
-                                },
-                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                                RecentInstructionsMarker,
-                            ));
+                                })
+                                .with_children(|parent| {
+                                    parent
+                                        .spawn(Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(50.0),
+                                            ..default()
+                                        })
+                                        .with_children(|parent| {
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("Instructions"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                            ));
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new(""),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                                RecentInstructionsMarker,
+                                            ));
+                                        });
 
-                            // keyboard
-                            parent.spawn((
-                                Node {
-                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
-                                    ..default()
-                                },
-                                Text::new("Key Map"),
-                                TextFont {
-                                    font_size: 16.0,
-                                    ..default()
-                                },
-                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
-                            ));
-                            parent.spawn((
-                                Node {
-                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
-                                    ..default()
-                                },
-                                Text::new("chip-8    qwerty\n1 2 3 C   1 2 3 4\n4 5 6 D   Q W E R\n7 8 9 E   A S D F\nA 0 B F   Z X C V"),
-                                TextFont {
-                                    font_size: 16.0,
-                                    ..default()
-                                },
-                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
-                            ));
+                                    // keyboard
+                                    parent
+                                        .spawn(Node {
+                                            flex_direction: FlexDirection::Column,
+                                            width: Val::Percent(50.0),
+                                            ..default()
+                                        })
+                                        .with_children(|parent| {
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("Key Map"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.75, 0.75, 0.75)),
+                                            ));
+                                            parent.spawn((
+                                                Node {
+                                                    margin: UiRect::left(Val::Px(12.0)).with_top(Val::Px(12.0)),
+                                                    ..default()
+                                                },
+                                                Text::new("chip-8    qwerty\n1 2 3 C   1 2 3 4\n4 5 6 D   Q W E R\n7 8 9 E   A S D F\nA 0 B F   Z X C V"),
+                                                TextFont {
+                                                    font_size: 16.0,
+                                                    ..default()
+                                                },
+                                                TextColor(Color::srgb(0.5, 0.5, 0.5)),
+                                            ));
+                                    });
+                                });
                         });
                 });
         });
