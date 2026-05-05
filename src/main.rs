@@ -5,6 +5,7 @@ use crate::constant::*;
 use crate::instruction::{RecentInstructions, execute, execute_frame_cycles};
 use crate::keyboard::keycode_to_key;
 use crate::machine::{Machine, load_default_rom};
+use crate::ui::Display;
 use crate::ui::{Background, ErrorText, setup_ui, update_ui};
 use bevy::prelude::*;
 use bevy::window::WindowMode;
@@ -52,6 +53,8 @@ fn step(
     keys: Res<ButtonInput<KeyCode>>,
     mut machine: ResMut<Machine>,
     mut next_state: ResMut<NextState<SimState>>,
+    display: Res<Display>,
+    mut images: ResMut<Assets<Image>>,
     mut commands: Commands,
     mut queue: ResMut<RecentInstructions>,
 ) {
@@ -59,10 +62,14 @@ fn step(
         next_state.set(SimState::Executing);
     }
     if keys.just_pressed(KeyCode::Space) {
+        let Some(display_image) = images.get_mut(&display.handle) else {
+            return;
+        };
         execute(
             &keys,
             &mut machine,
             &mut next_state,
+            display_image,
             &mut commands,
             &mut queue,
         );

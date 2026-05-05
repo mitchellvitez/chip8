@@ -165,8 +165,8 @@ pub fn update_ui(
 pub fn create_display_image(images: &mut Assets<Image>) -> Handle<Image> {
     let mut image = Image::new_fill(
         Extent3d {
-            width: DISPLAY_WIDTH as u32,
-            height: DISPLAY_HEIGHT as u32,
+            width: LO_RES_DISPLAY_WIDTH as u32,
+            height: LO_RES_DISPLAY_HEIGHT as u32,
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,

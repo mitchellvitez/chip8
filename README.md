@@ -15,6 +15,11 @@ Built with Bevy and Rust
   - 4k of RAM
   - 16 input keys
   - built-in pixel font
+- SuperChip extension
+  - scrolling
+  - two display resolutions
+  - bigger sprites
+  - cross-program registers
 - plus several extras and a full UI
   - single-step and continuous execution modes
   - shows running instructions in the UI, disassembled on the fly

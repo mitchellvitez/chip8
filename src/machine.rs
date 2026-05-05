@@ -1,5 +1,5 @@
 use crate::constant::*;
-use crate::keyboard::key_sprite;
+use crate::keyboard::{key_big_sprite, key_sprite};
 use bevy::prelude::*;
 use std::fs;
 use std::path::PathBuf;
@@ -23,9 +23,14 @@ pub struct Machine {
     /// allocate RAM on the heap in case we want to make it huge later
     pub memory: Box<[u8; RAM_SIZE]>,
     /// monochrome display
-    pub display: [bool; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+    pub display: Vec<bool>,
     /// number of cycles since the machine started
     pub cycles: u32,
+
+    // SuperChip extension
+    /// registers that mirror the existing registers but aren't wiped by a machine.reset()
+    pub cross_program_registers: [u8; NUM_CROSS_PROGRAM_REGISTERS],
+    pub hi_res_display: bool,
 }
 
 pub fn load_default_rom(mut machine: ResMut<Machine>) {
@@ -36,7 +41,9 @@ pub fn load_default_rom(mut machine: ResMut<Machine>) {
 
 impl Machine {
     fn reset(&mut self) {
-        *self = Self::default()
+        let saved_registers = self.cross_program_registers;
+        *self = Self::default();
+        self.cross_program_registers = saved_registers;
     }
 
     pub fn load_rom(&mut self, path: PathBuf) {
@@ -46,6 +53,14 @@ impl Machine {
         let rom = fs::read(path).expect("failed to read ROM file");
         self.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
             .copy_from_slice(&rom);
+    }
+
+    pub fn get_display_resolution(&self) -> (usize, usize) {
+        if self.hi_res_display {
+            (HI_RES_DISPLAY_WIDTH, HI_RES_DISPLAY_HEIGHT)
+        } else {
+            (LO_RES_DISPLAY_WIDTH, LO_RES_DISPLAY_HEIGHT)
+        }
     }
 }
 
@@ -60,8 +75,10 @@ impl Default for Machine {
             sp: 0,
             stack: [0; STACK_SIZE],
             memory: Box::new([0; RAM_SIZE]),
-            display: [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
+            display: vec![false; LO_RES_DISPLAY_WIDTH * LO_RES_DISPLAY_HEIGHT],
             cycles: 0,
+            cross_program_registers: [0; NUM_CROSS_PROGRAM_REGISTERS],
+            hi_res_display: false,
         };
 
         // fill specified bytes of memory with the hex digit "font"
@@ -69,6 +86,14 @@ impl Default for Machine {
             if let Some(sprite) = key_sprite(i as u8) {
                 let offset = (FONT_START_ADDRESS + i * 5) as usize;
                 machine.memory[offset..offset + 5].copy_from_slice(&sprite);
+            }
+        }
+
+        // fill specified bytes of memory with the decimal digit "big font"
+        for i in 0..=9 {
+            if let Some(sprite) = key_big_sprite(i as u8) {
+                let offset = (BIG_FONT_START_ADDRESS + i * 10) as usize;
+                machine.memory[offset..offset + 10].copy_from_slice(&sprite);
             }
         }
 
