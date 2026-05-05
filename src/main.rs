@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::audio::setup_audio;
 use crate::constant::*;
-use crate::instruction::{RecentInstructions, execute};
+use crate::instruction::{RecentInstructions, execute, execute_frame_cycles};
 use crate::keyboard::keycode_to_key;
 use crate::machine::{Machine, load_default_rom};
 use crate::ui::{Background, ErrorText, setup_ui, update_ui};
@@ -37,16 +37,7 @@ fn main() {
         .add_systems(Update, update_ui)
         .add_systems(
             Update,
-            // this is a bit silly, but a straightforward way to improve performance
-            // is to execute many (here, 20) instructions per Update
-            // didn't bother, but you could execute many more times or run a fixed number
-            // of times per FixedUpdate tick
-            (
-                execute, execute, execute, execute, execute, execute, execute, execute, execute,
-                execute, execute, execute, execute, execute, execute, execute, execute, execute,
-                execute, execute,
-            )
-                .run_if(in_state(SimState::Executing)),
+            execute_frame_cycles.run_if(in_state(SimState::Executing)),
         )
         .add_systems(Update, step.run_if(in_state(SimState::Stepping)))
         .add_systems(
@@ -59,16 +50,22 @@ fn main() {
 
 fn step(
     keys: Res<ButtonInput<KeyCode>>,
-    machine: ResMut<Machine>,
+    mut machine: ResMut<Machine>,
     mut next_state: ResMut<NextState<SimState>>,
-    commands: Commands,
-    queue: ResMut<RecentInstructions>,
+    mut commands: Commands,
+    mut queue: ResMut<RecentInstructions>,
 ) {
     if keys.just_pressed(KeyCode::KeyP) {
         next_state.set(SimState::Executing);
     }
     if keys.just_pressed(KeyCode::Space) {
-        execute(keys, machine, next_state, commands, queue);
+        execute(
+            &keys,
+            &mut machine,
+            &mut next_state,
+            &mut commands,
+            &mut queue,
+        );
     }
 }
 
@@ -88,6 +85,7 @@ fn handle_error(
 #[derive(States, Default, Hash, Clone, Eq, PartialEq, Debug)]
 enum SimState {
     #[default]
+    // TODO: maybe Executing/Stepping should be two substates within SimState
     Executing,
     Stepping,
     WaitingForKey,
@@ -135,10 +133,11 @@ fn wait_for_key(
 
     let x = register.register;
 
-    for keycode in keys.get_just_pressed() {
+    for keycode in keys.get_just_released() {
         if let Some(key) = keycode_to_key(*keycode) {
             machine.registers[x as usize] = key;
-            machine.pc += 2;
+            // TODO: keep track of the last state (Stepping/Executing/etc., whatever was the one we
+            // came from to this WaitingForKey) and return to that state here
             next_state.set(SimState::Executing);
             commands.remove_resource::<RegisterAwaitingKeyInput>();
         }

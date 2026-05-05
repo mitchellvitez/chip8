@@ -26,9 +26,9 @@ enum Instruction {
     Xor { x: u8, y: u8 },
     Add { x: u8, y: u8 },
     Sub { x: u8, y: u8 },
-    Shr { x: u8 },
+    Shr { x: u8, y: u8 },
     Subn { x: u8, y: u8 },
-    Shl { x: u8 },
+    Shl { x: u8, y: u8 },
     Sne { x: u8, y: u8 },
     LdAddr { addr: u16 },
     JpOffset { addr: u16 },
@@ -85,9 +85,9 @@ fn decode(opcode: u16) -> Option<Instruction> {
         (0x8, _, _, 0x3) => Some(Instruction::Xor { x, y }),
         (0x8, _, _, 0x4) => Some(Instruction::Add { x, y }),
         (0x8, _, _, 0x5) => Some(Instruction::Sub { x, y }),
-        (0x8, _, _, 0x6) => Some(Instruction::Shr { x }),
+        (0x8, _, _, 0x6) => Some(Instruction::Shr { x, y }),
         (0x8, _, _, 0x7) => Some(Instruction::Subn { x, y }),
-        (0x8, _, _, 0xE) => Some(Instruction::Shl { x }),
+        (0x8, _, _, 0xE) => Some(Instruction::Shl { x, y }),
         (0x9, _, _, 0x0) => Some(Instruction::Sne { x, y }),
         (0xA, ..) => Some(Instruction::LdAddr { addr }),
         (0xB, ..) => Some(Instruction::JpOffset { addr }),
@@ -127,9 +127,9 @@ fn instruction_to_string(instruction: Instruction) -> String {
         Instruction::Xor { x, y } => format!("XOR V{:01X}, V{:01X}", x, y),
         Instruction::Add { x, y } => format!("ADD V{:01X}, V{:01X}", x, y),
         Instruction::Sub { x, y } => format!("SUB V{:01X}, V{:01X}", x, y),
-        Instruction::Shr { x } => format!("SHR V{:01X}", x),
+        Instruction::Shr { x, y } => format!("SHR V{:01X} V{:01X}", x, y),
         Instruction::Subn { x, y } => format!("SUBN V{:01X}, V{:01X}", x, y),
-        Instruction::Shl { x } => format!("SHL V{:01X}", x),
+        Instruction::Shl { x, y } => format!("SHL V{:01X} V{:01X}", x, y),
         Instruction::Sne { x, y } => format!("SNE V{:01X}, V{:01X}", x, y),
         Instruction::LdAddr { addr } => format!("LD I, 0x{:03X}", addr),
         Instruction::JpOffset { addr } => format!("JP V0, 0x{:03X}", addr),
@@ -149,23 +149,40 @@ fn instruction_to_string(instruction: Instruction) -> String {
     }
 }
 
-fn fatal_error(
-    mut next_state: ResMut<NextState<SimState>>,
-    mut commands: Commands,
-    message: String,
-) {
+fn fatal_error(next_state: &mut NextState<SimState>, commands: &mut Commands, message: String) {
     next_state.set(SimState::Errored);
     commands.insert_resource(FatalError { message });
 }
 
-/// executes a single instruction and puts the machine in the right state to execute the next one
-pub fn execute(
+pub fn execute_frame_cycles(
     keys: Res<ButtonInput<KeyCode>>,
     mut machine: ResMut<Machine>,
     mut next_state: ResMut<NextState<SimState>>,
     mut commands: Commands,
     mut queue: ResMut<RecentInstructions>,
 ) {
+    for _ in 0..CYCLES_PER_FRAME {
+        if !execute(
+            &keys,
+            &mut machine,
+            &mut next_state,
+            &mut commands,
+            &mut queue,
+        ) {
+            break;
+        }
+    }
+}
+
+/// executes a single instruction and puts the machine in the right state to execute the next one
+/// returns true if we should keep processing cycles, and false if we should stop
+pub fn execute(
+    keys: &ButtonInput<KeyCode>,
+    machine: &mut Machine,
+    next_state: &mut NextState<SimState>,
+    commands: &mut Commands,
+    queue: &mut RecentInstructions,
+) -> bool {
     if keys.just_pressed(KeyCode::KeyP) {
         next_state.set(SimState::Stepping);
     }
@@ -176,7 +193,7 @@ pub fn execute(
             commands,
             "PC (program counter) exceeds RAM size".to_string(),
         );
-        return;
+        return false;
     }
 
     let opcode = u16::from_be_bytes([
@@ -189,7 +206,7 @@ pub fn execute(
             commands,
             format!("unknown instruction, opcode = 0x{:04X}", opcode),
         );
-        return;
+        return false;
     };
 
     machine.cycles += 1;
@@ -205,26 +222,30 @@ pub fn execute(
     match instruction {
         Instruction::Cls => machine.display = [false; DISPLAY_WIDTH * DISPLAY_HEIGHT],
         Instruction::Ret => {
-            machine.pc = machine.stack[machine.sp as usize];
+            let sp = machine.sp as usize;
+            machine.stack[sp] = 0;
             machine.sp -= 1;
+            machine.pc = machine.stack[machine.sp as usize];
+            // TODO: fatal error on stack underflow
         }
         // Instruction::Sys { .. } => {} // no-op
         Instruction::Jp { addr } => {
             if machine.pc - 2 == addr {
                 // infinite loop, likely intentional at the end of a program
-                // uncomment the next line to pause execution in this case
-                // next_state.set(SimState::Stepping);
+                // pause execution in this case (to see the ROM's total cycle count)
+                next_state.set(SimState::Stepping);
+                return false;
             }
             machine.pc = addr
         }
         Instruction::Call { addr } => {
+            let sp = machine.sp as usize;
+            machine.stack[sp] = machine.pc;
             machine.sp += 1;
             if machine.sp >= 16 {
                 fatal_error(next_state, commands, "stack overflow".to_string());
-                return;
+                return false;
             }
-            let sp = machine.sp as usize;
-            machine.stack[sp] = machine.pc;
             machine.pc = addr;
         }
         Instruction::SeByte { x, byte } => {
@@ -248,19 +269,21 @@ pub fn execute(
         Instruction::AddByte { x, byte } => {
             let result = machine.registers[x as usize] as u16 + byte as u16;
             machine.registers[x as usize] = (result & 0xFF) as u8;
-            machine.registers[0xF] = if result > 255 { 1 } else { 0 };
         }
         Instruction::Ld { x, y } => {
             machine.registers[x as usize] = machine.registers[y as usize];
         }
         Instruction::Or { x, y } => {
             machine.registers[x as usize] |= machine.registers[y as usize];
+            machine.registers[0xF] = 0;
         }
         Instruction::And { x, y } => {
             machine.registers[x as usize] &= machine.registers[y as usize];
+            machine.registers[0xF] = 0;
         }
         Instruction::Xor { x, y } => {
             machine.registers[x as usize] ^= machine.registers[y as usize];
+            machine.registers[0xF] = 0;
         }
         Instruction::Add { x, y } => {
             let result =
@@ -279,9 +302,9 @@ pub fn execute(
             machine.registers[x as usize] = result;
             machine.registers[0xF] = carry;
         }
-        Instruction::Shr { x } => {
-            let carry = machine.registers[x as usize] & 0x1;
-            machine.registers[x as usize] >>= 1;
+        Instruction::Shr { x, y } => {
+            let carry = machine.registers[y as usize] & 0x1;
+            machine.registers[x as usize] = machine.registers[y as usize] >> 1;
             machine.registers[0xF] = carry;
         }
         Instruction::Subn { x, y } => {
@@ -294,9 +317,9 @@ pub fn execute(
                 machine.registers[y as usize].wrapping_sub(machine.registers[x as usize]);
             machine.registers[0xF] = carry;
         }
-        Instruction::Shl { x } => {
-            let carry = (machine.registers[x as usize] >> 7) & 1;
-            machine.registers[x as usize] <<= 1;
+        Instruction::Shl { x, y } => {
+            let carry = (machine.registers[y as usize] >> 7) & 1;
+            machine.registers[x as usize] = machine.registers[y as usize] << 1;
             machine.registers[0xF] = carry;
         }
         Instruction::Sne { x, y } => {
@@ -317,7 +340,7 @@ pub fn execute(
         Instruction::Drw { x, y, n } => {
             let x = machine.registers[x as usize] as usize % DISPLAY_WIDTH;
             let y = machine.registers[y as usize] as usize % DISPLAY_HEIGHT;
-            machine.registers[0xF] = 0; // tracks if any pixels were flipped
+            let mut pixel_flipped = 0;
             for row in 0..n as usize {
                 let byte = machine.memory[machine.i as usize + row];
                 let py = y + row;
@@ -336,11 +359,13 @@ pub fn execute(
                     let index = py * DISPLAY_WIDTH + px;
                     // check if pixel flipped and set register if so
                     if machine.display[index] {
-                        machine.registers[0xF] = 1;
+                        pixel_flipped = 1;
                     }
                     machine.display[index] ^= true;
                 }
             }
+            machine.registers[0xF] = pixel_flipped; // tracks if any pixels were flipped
+            return false;
         }
         Instruction::Skp { x } => {
             if let Some(keycode) = key_to_keycode(machine.registers[x as usize])
@@ -362,6 +387,7 @@ pub fn execute(
         Instruction::LdKey { x } => {
             commands.insert_resource(RegisterAwaitingKeyInput { register: x });
             next_state.set(SimState::WaitingForKey);
+            return false;
         }
         Instruction::LdDtVx { x } => {
             machine.dt = machine.registers[x as usize];
@@ -405,4 +431,5 @@ pub fn execute(
             machine.i += x as u16 + 1;
         }
     }
+    true
 }

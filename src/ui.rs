@@ -418,7 +418,7 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                                         ..default()
                                     },
                                 ))
-                                    .observe(|_trigger: On<Pointer<Click>>, mut machine: ResMut<Machine>, mut rom_name: Query<&mut Text, With<CurrentRomMarker>>,     state: Res<State<SimState>>,  mut next_state: ResMut<NextState<SimState>>
+                                    .observe(|_trigger: On<Pointer<Click>>, mut machine: ResMut<Machine>, mut rom_name: Query<&mut Text, With<CurrentRomMarker>>, mut next_state: ResMut<NextState<SimState>>
 
     | {
                                     if let Some(path) = FileDialog::new()
@@ -429,9 +429,7 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                                         if let Ok(mut text) = rom_name.single_mut() {
                                             **text = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
                                         }
-                                        if state.get() == &SimState::WaitingForKey {
-                                            next_state.set(SimState::Executing);
-                                        }
+                                        next_state.set(SimState::Executing);
                                     }
                                 });
                                 });
