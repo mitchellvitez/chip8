@@ -4,7 +4,7 @@ CHIP-8 is an interpreter/instruction set/specification/"fantasy console" often u
 
 Built with Bevy and Rust
 
-<img width="1728" height="1084" alt="startup" src="https://github.com/user-attachments/assets/5b33de17-ee92-44bd-83db-893d0cbb2500" />
+<img width="1728" height="1084" alt="Screenshot 2026-05-06 at 2 26 52 PM" src="https://github.com/user-attachments/assets/6c2dcb7e-fd86-4566-98da-ea3cb695ba74" />
 
 ## Features
 
@@ -54,4 +54,4 @@ Unrecoverable bugs encountered in Chip-8 programs send the UI into the "fatal er
 
 <br>
 
-Note that I didn't write the ROMs (with the outputs seen above) myself
+Note that I didn't write the test ROMs (with the outputs seen above) myself
