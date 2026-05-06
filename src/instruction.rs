@@ -263,6 +263,32 @@ pub fn skip_long_opcodes(machine: &mut Machine) {
      }
 }
 
+fn scroll(machine: &mut Machine, x: isize, y: isize) {
+    let (width, height) = machine.get_display_resolution();
+    let size = width * height;
+    let delta = y * width as isize + x;
+    let range: Box<dyn Iterator<Item = usize>> = if delta > 0 {
+        Box::new((0..size).rev())
+    } else {
+        Box::new(0..size)
+    };
+    for dest in range {
+        let src = dest as isize - delta;
+        let dest_x = dest % width;
+        let dest_y = dest / width;
+        let src_x = dest_x as isize - x;
+        let src_y = dest_y as isize - y;
+        let src_val = if src_x >= 0 && src_x < width as isize && src_y >= 0 && src_y < height as isize {
+            machine.display[src as usize]
+        } else {
+            (false, false)
+        };
+
+        if machine.drawing_plane_one { machine.display[dest].0 = src_val.0 }
+        if machine.drawing_plane_two { machine.display[dest].1 = src_val.1 }
+    }
+}
+
 /// executes a single instruction and puts the machine in the right state to execute the next one
 /// returns true if we should keep processing cycles, and false if we should stop
 #[allow(clippy::too_many_arguments)]
@@ -573,32 +599,13 @@ pub fn execute(
 
         ////////// Super-Chip extension //////////
         Instruction::ScrDwn { n } => {
-            let (width, height) = machine.get_display_resolution();
-            let shift = n as usize * width;
-            machine
-                .display
-                .copy_within(0..width * height - shift, shift);
-            machine.display[0..shift].fill((false, false));
+            scroll(machine, 0, n as isize);
         }
         Instruction::ScrRgt4 => {
-            let (width, height) = machine.get_display_resolution();
-            for row in 0..height {
-                let start = row * width;
-                let end = start + width;
-                let row_slice = &mut machine.display[start..end];
-                row_slice.copy_within(0..width - 4, 4);
-                row_slice[0..4].fill((false, false));
-            }
+            scroll(machine, 4, 0);
         }
         Instruction::ScrLft4 => {
-            let (width, height) = machine.get_display_resolution();
-            for row in 0..height {
-                let start = row * width;
-                let end = start + width;
-                let row_slice = &mut machine.display[start..end];
-                row_slice.copy_within(4..width, 0);
-                row_slice[width - 4..].fill((false, false));
-            }
+            scroll(machine, -4, 0);
         }
         Instruction::Exit => {
             next_state.set(SimState::Stepping);
@@ -690,14 +697,8 @@ pub fn execute(
         Instruction::Ptch { x} => {
             machine.pitch_register = machine.registers[x as usize];
         },
-        // TODO: the four scroll instructions need to be drawing-plane-specific
         Instruction::ScrUp { n } => {
-            let (width, height) = machine.get_display_resolution();
-            let shift = n as usize * width;
-            machine
-                .display
-                .copy_within(shift .. width * height, 0);
-            machine.display[width * height - shift ..].fill((false, false));
+            scroll(machine, 0, -(n as isize));
         }
     }
     true
