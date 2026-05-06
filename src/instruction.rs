@@ -57,8 +57,20 @@ enum Instruction {
     HiRes,
     LoRes,
     LdFntBig { x: u8 },
-    SavCrsReg { x: u8 },
-    LdCrsReg { x: u8 },
+    // overridden by XO-chip
+    // SavCrsReg { x: u8 },
+    // LdCrsReg { x: u8 },
+
+    // XO-Chip extension
+    LdMemRng { x: u8, y: u8 },
+    LdRngMem { x: u8, y: u8 },
+    SavFlags { x: u8 },
+    LdFlags { x: u8 },
+    LdILng,
+    Pln { x: u8 },
+    Aud,
+    Ptch { x: u8},
+    ScrUp { n: u8 },
 }
 
 #[derive(Resource)]
@@ -127,8 +139,20 @@ fn decode(opcode: u16) -> Option<Instruction> {
         (0x0, 0x0, 0xF, 0xE) => Some(Instruction::HiRes),
         (0x0, 0x0, 0xF, 0xF) => Some(Instruction::LoRes),
         (0xF, _, 0x3, 0x0) => Some(Instruction::LdFntBig { x }),
-        (0xF, _, 0x7, 0x5) => Some(Instruction::SavCrsReg { x }),
-        (0xF, _, 0x8, 0x5) => Some(Instruction::LdCrsReg { x }),
+        // overridden by XO-Chip
+        // (0xF, _, 0x7, 0x5) => Some(Instruction::SavCrsReg { x }),
+        // (0xF, _, 0x8, 0x5) => Some(Instruction::LdCrsReg { x }),
+
+        // XO-Chip extension
+        (0x5, _, _, 0x2) => Some(Instruction::LdMemRng { x, y }),
+        (0x5, _, _, 0x3) => Some(Instruction::LdRngMem { x, y }),
+        (0xF, _, 0x7, 0x5) => Some(Instruction::SavFlags { x }),
+        (0xF, _, 0x8, 0x5) => Some(Instruction::LdFlags { x }),
+        (0xF, 0x0, 0x0, 0x0) => Some(Instruction::LdILng),
+        (0xF, _, 0x0, 0x1) => Some(Instruction::Pln { x }),
+        (0xF, 0x0, 0x0, 0x2) => Some(Instruction::Aud),
+        (0xF, _, 0x3, 0xA) => Some(Instruction::Ptch { x }),
+        (0x0, 0x0, 0xD, _) => Some(Instruction::ScrUp { n }),
 
         _ => None,
     }
@@ -168,7 +192,7 @@ fn instruction_to_string(instruction: Instruction) -> String {
         Instruction::LdDtVx { x } => format!("LD DT, V{:01X}", x),
         Instruction::LdStVx { x } => format!("LD ST, V{:01X}", x),
         Instruction::AddI { x } => format!("ADD I, V{:01X}", x),
-        Instruction::LdFnt { x } => format!("LD F, V{:01X}", x),
+        Instruction::LdFnt { x } => format!("LD FNT, V{:01X}", x),
         Instruction::LdB { x } => format!("LD B, V{:01X}", x),
         Instruction::LdMemReg { x } => format!("LD [I], V{:01X}", x),
         Instruction::LdRegMem { x } => format!("LD V{:01X}, [I]", x),
@@ -180,9 +204,21 @@ fn instruction_to_string(instruction: Instruction) -> String {
         Instruction::Exit => "EXIT".to_string(),
         Instruction::HiRes => "HIRES".to_string(),
         Instruction::LoRes => "LORES".to_string(),
-        Instruction::LdFntBig { x } => format!("LD FB, V{:01X}", x),
-        Instruction::SavCrsReg { x } => format!("LD C{:01X}, V{:01X}", x, x),
-        Instruction::LdCrsReg { x } => format!("LD V{:01X}, C{:01X}", x, x),
+        Instruction::LdFntBig { x } => format!("LD FNTB, V{:01X}", x),
+        // overridden by XO-Chip
+        // Instruction::SavCrsReg { x } => format!("LD C{:01X}, V{:01X}", x, x),
+        // Instruction::LdCrsReg { x } => format!("LD V{:01X}, C{:01X}", x, x),
+
+        // XO-Chip extension
+        Instruction::LdMemRng { x, y } => format!("LDRNG [I], V{:01X} - V{:01X}", x, y),
+        Instruction::LdRngMem { x, y } => format!("LDRNG V{:01X} - V{:01X}, [I]", x, y),
+        Instruction::SavFlags { x } => format!("LD CR{:01X}, V{:01X}", x, x),
+        Instruction::LdFlags { x } => format!("LD V{:01X}, CR{:01X}", x, x),
+        Instruction::LdILng => "LDLNG I".to_string(),
+        Instruction::Pln { x } => format!("PLN 0x{:01X}", x),
+        Instruction::Aud => "AUD".to_string(),
+        Instruction::Ptch { x } => format!("PTCH V{:01X}", x),
+        Instruction::ScrUp { n } => format!("SCRU 0x{:01X}", n),
     }
 }
 
@@ -563,6 +599,8 @@ pub fn execute(
             }
             machine.i = BIG_FONT_START_ADDRESS + (machine.registers[x as usize] * 10) as u16;
         }
+        // overridden by XO-Chip
+        /*
         Instruction::SavCrsReg { x } => {
             let x = x & 0b111;
             machine.cross_program_registers[x as usize] = machine.registers[x as usize];
@@ -570,6 +608,62 @@ pub fn execute(
         Instruction::LdCrsReg { x } => {
             let x = x & 0b111;
             machine.registers[x as usize] = machine.cross_program_registers[x as usize];
+        }
+        */
+
+
+        ////////// XO-Chip extension //////////
+        Instruction::LdMemRng { x, y } => {
+            let range = if x < y { x..=y } else { y..=x };
+            for reg in range.clone() {
+                let i = machine.i as usize;
+                machine.memory[i + reg as usize] = machine.registers[reg as usize];
+            }
+        },
+        Instruction::LdRngMem { x, y } => {
+            let range = if x < y { x..=y } else { y..=x };
+            for reg in range.clone() {
+                let i = machine.i as usize;
+                machine.registers[reg as usize] = machine.memory[i + reg as usize];
+            }
+        },
+        Instruction::SavFlags { x } => {
+            let x = x & 0b111;
+            for reg in 0..=x {
+                machine.cross_program_registers[reg as usize] = machine.registers[reg as usize];
+            }
+        },
+        Instruction::LdFlags { x } => {
+            let x = x & 0b111;
+            for reg in 0..=x {
+                machine.registers[reg as usize] = machine.cross_program_registers[reg as usize];
+            }
+        },
+        Instruction::LdILng => {
+            machine.i = u16::from_be_bytes([
+                machine.memory[machine.pc as usize],
+                machine.memory[machine.pc as usize + 1],
+            ]);
+            machine.pc += 2;
+        },
+        Instruction::Pln { x } => {
+            machine.drawing_plane_one = (x & 1) != 0;
+            machine.drawing_plane_two = (x & 0b10) != 0;
+        },
+        Instruction::Aud => {
+            let i = machine.i as usize;
+            machine.audio_pattern_buffer.copy_from_slice(&machine.memory[i..i + 16]);
+        },
+        Instruction::Ptch { x} => {
+            machine.pitch_register = machine.registers[x as usize];
+        },
+        Instruction::ScrUp { n } => {
+            let (width, height) = machine.get_display_resolution();
+            let shift = n as usize * width;
+            machine
+                .display
+                .copy_within(shift .. width * height, 0);
+            machine.display[width * height - shift ..].fill(false);
         }
     }
     true

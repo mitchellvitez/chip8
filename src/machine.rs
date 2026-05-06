@@ -36,6 +36,12 @@ pub struct Machine {
     /// but aren't wiped by a machine reset
     pub cross_program_registers: [u8; NUM_CROSS_PROGRAM_REGISTERS],
     pub hi_res_display: bool,
+
+    // XO-Chip extension
+    pub drawing_plane_one: bool,
+    pub drawing_plane_two: bool,
+    pub audio_pattern_buffer: [u8; 16],
+    pub pitch_register: u8,
 }
 
 pub fn load_default_rom(
@@ -102,6 +108,10 @@ impl Machine {
             (LO_RES_DISPLAY_WIDTH, LO_RES_DISPLAY_HEIGHT)
         }
     }
+
+    pub fn _audio_playback_rate(&self) -> usize {
+        4000 * (2 ^ ((self.pitch_register as usize - 64) / 48))
+    }
 }
 
 impl Default for Machine {
@@ -119,6 +129,10 @@ impl Default for Machine {
             cycles: 0,
             cross_program_registers: [0; NUM_CROSS_PROGRAM_REGISTERS],
             hi_res_display: false,
+            drawing_plane_one: true,
+            drawing_plane_two: false,
+            audio_pattern_buffer: [0; 16],
+            pitch_register: 1,
         };
 
         // fill specified bytes of memory with the hex digit "font"
