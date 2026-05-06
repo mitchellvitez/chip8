@@ -10,7 +10,8 @@ pub const PROGRAM_START_ADDRESS: u16 = 0x200;
 pub const FONT_START_ADDRESS: u16 = 0x50;
 pub const CYCLES_PER_FRAME: usize = 50;
 pub const COLOR_RED: Color = Color::srgb(1.0, 0.0, 0.0);
-// SuperChip extension
+
+// Super-Chip extension
 pub const HI_RES_DISPLAY_WIDTH: usize = 128;
 pub const HI_RES_DISPLAY_HEIGHT: usize = 64;
 pub const NUM_CROSS_PROGRAM_REGISTERS: usize = 8;

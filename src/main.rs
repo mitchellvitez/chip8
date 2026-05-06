@@ -1,21 +1,24 @@
 use std::collections::VecDeque;
 
 use crate::audio::setup_audio;
-use crate::constant::*;
-use crate::instruction::{RecentInstructions, execute, execute_frame_cycles};
-use crate::keyboard::keycode_to_key;
-use crate::machine::{Machine, load_default_rom};
+use crate::error::{clear_error, handle_error};
+use crate::instruction::{execute, execute_frame_cycles, RecentInstructions};
+use crate::keyboard::wait_for_key;
+use crate::machine::{load_default_rom, Machine};
 use crate::ui::Display;
-use crate::ui::{Background, ErrorText, setup_ui, update_ui};
+use crate::ui::{setup_ui, update_ui};
 use bevy::prelude::*;
 use bevy::window::WindowMode;
 
 mod audio;
 mod constant;
+mod error;
 mod instruction;
 mod keyboard;
 mod machine;
 mod ui;
+
+// TODO: support XO-chip extension
 
 fn main() {
     App::new()
@@ -28,8 +31,12 @@ fn main() {
         }))
         .init_state::<SimState>()
         .insert_resource(Time::<Fixed>::from_hz(60.0))
+        .insert_resource(Display::default())
         .insert_resource(Machine::default())
         .insert_resource(ClearColor(Color::BLACK))
+        .insert_resource(LastState {
+            last_state: SimState::default(),
+        })
         .insert_resource(RecentInstructions {
             recent_instructions: VecDeque::new(),
         })
@@ -46,9 +53,25 @@ fn main() {
             wait_for_key.run_if(in_state(SimState::WaitingForKey)),
         )
         .add_systems(OnEnter(SimState::Errored), handle_error)
+        .add_systems(OnExit(SimState::Errored), clear_error)
         .run();
 }
 
+#[derive(States, Default, Hash, Copy, Clone, Eq, PartialEq, Debug)]
+enum SimState {
+    #[default]
+    Executing,
+    Stepping,
+    WaitingForKey,
+    Errored,
+}
+
+#[derive(Resource)]
+struct LastState {
+    last_state: SimState,
+}
+
+#[allow(clippy::too_many_arguments)]
 fn step(
     keys: Res<ButtonInput<KeyCode>>,
     mut machine: ResMut<Machine>,
@@ -57,6 +80,8 @@ fn step(
     mut images: ResMut<Assets<Image>>,
     mut commands: Commands,
     mut queue: ResMut<RecentInstructions>,
+    state: Res<State<SimState>>,
+    mut last_state: ResMut<LastState>,
 ) {
     if keys.just_pressed(KeyCode::KeyP) {
         next_state.set(SimState::Executing);
@@ -72,41 +97,10 @@ fn step(
             display_image,
             &mut commands,
             &mut queue,
+            *state.get(),
+            &mut last_state,
         );
     }
-}
-
-fn handle_error(
-    error: Res<FatalError>,
-    mut error_text: Query<&mut Text, With<ErrorText>>,
-    mut background: Query<&mut BackgroundColor, With<Background>>,
-) {
-    if let Ok(mut text) = error_text.single_mut() {
-        **text = format!("ERROR: {}", error.message);
-    }
-    if let Ok(mut background) = background.single_mut() {
-        background.0 = COLOR_RED;
-    }
-}
-
-#[derive(States, Default, Hash, Clone, Eq, PartialEq, Debug)]
-enum SimState {
-    #[default]
-    // TODO: maybe Executing/Stepping should be two substates within SimState
-    Executing,
-    Stepping,
-    WaitingForKey,
-    Errored,
-}
-
-#[derive(Resource)]
-struct RegisterAwaitingKeyInput {
-    register: u8,
-}
-
-#[derive(Resource)]
-struct FatalError {
-    message: String,
 }
 
 fn tick_timers(mut machine: ResMut<Machine>, mut audio: Query<&AudioSink>) {
@@ -122,31 +116,5 @@ fn tick_timers(mut machine: ResMut<Machine>, mut audio: Query<&AudioSink>) {
         audio.play();
     } else {
         audio.pause();
-    }
-}
-
-/// halts normal execution until a new keyboard input comes in
-fn wait_for_key(
-    state: Res<State<SimState>>,
-    mut next_state: ResMut<NextState<SimState>>,
-    keys: Res<ButtonInput<KeyCode>>,
-    mut machine: ResMut<Machine>,
-    register: Res<RegisterAwaitingKeyInput>,
-    mut commands: Commands,
-) {
-    let SimState::WaitingForKey = state.get() else {
-        return;
-    };
-
-    let x = register.register;
-
-    for keycode in keys.get_just_released() {
-        if let Some(key) = keycode_to_key(*keycode) {
-            machine.registers[x as usize] = key;
-            // TODO: keep track of the last state (Stepping/Executing/etc., whatever was the one we
-            // came from to this WaitingForKey) and return to that state here
-            next_state.set(SimState::Executing);
-            commands.remove_resource::<RegisterAwaitingKeyInput>();
-        }
     }
 }

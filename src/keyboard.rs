@@ -1,5 +1,8 @@
 use bevy::prelude::*;
 
+use crate::LastState;
+use crate::{SimState, machine::Machine};
+
 // chip-8    qwerty
 // 1 2 3 C   1 2 3 4
 // 4 5 6 D   Q W E R
@@ -11,7 +14,7 @@ struct Key {
     keycode: KeyCode,
     sprite: [u8; 5],
 
-    // SuperChip extension
+    // Super-Chip extension
     big_sprite: Option<[u8; 10]>,
 }
 
@@ -130,6 +133,36 @@ pub fn key_big_sprite(key: u8) -> Option<[u8; 10]> {
     KEYS.iter()
         .find(|k| k.key == key)
         .and_then(|k| k.big_sprite)
+}
+
+#[derive(Resource)]
+pub struct RegisterAwaitingKeyInput {
+    pub register: u8,
+}
+
+/// halts normal execution until a new keyboard input comes in
+pub fn wait_for_key(
+    state: Res<State<SimState>>,
+    mut next_state: ResMut<NextState<SimState>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mut machine: ResMut<Machine>,
+    register: Res<RegisterAwaitingKeyInput>,
+    mut commands: Commands,
+    last_state: Res<LastState>,
+) {
+    let SimState::WaitingForKey = state.get() else {
+        return;
+    };
+
+    let x = register.register;
+
+    for keycode in keys.get_just_released() {
+        if let Some(key) = keycode_to_key(*keycode) {
+            machine.registers[x as usize] = key;
+            next_state.set(last_state.last_state);
+            commands.remove_resource::<RegisterAwaitingKeyInput>();
+        }
+    }
 }
 
 // for testing the font design

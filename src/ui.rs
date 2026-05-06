@@ -1,3 +1,4 @@
+use crate::error::fatal_error;
 use crate::instruction::RecentInstructions;
 use crate::machine::Machine;
 use crate::{SimState, constant::*};
@@ -179,10 +180,13 @@ pub fn create_display_image(images: &mut Assets<Image>) -> Handle<Image> {
 }
 
 pub fn create_ram_visualizer_image(images: &mut Assets<Image>) -> Handle<Image> {
+    let width = 128;
+    let height = 32;
+    assert!(width * height == RAM_SIZE);
     let mut image = Image::new_fill(
         Extent3d {
-            width: 128,
-            height: RAM_SIZE as u32 / 128,
+            width: width as u32,
+            height: height as u32,
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
@@ -418,17 +422,23 @@ pub fn setup_ui(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
                                         ..default()
                                     },
                                 ))
-                                    .observe(|_trigger: On<Pointer<Click>>, mut machine: ResMut<Machine>, mut rom_name: Query<&mut Text, With<CurrentRomMarker>>, mut next_state: ResMut<NextState<SimState>>
+                                    .observe(|_trigger: On<Pointer<Click>>, mut machine: ResMut<Machine>, mut rom_name: Query<&mut Text, With<CurrentRomMarker>>, mut next_state: ResMut<NextState<SimState>>, mut commands: Commands, mut display: ResMut<Display>, mut images: ResMut<Assets<Image>>
 
     | {
-                                    if let Some(path) = FileDialog::new()
+                                    let Some(path) = FileDialog::new()
                                         .add_filter("ROM", &["ch8", "rom"])
-                                        .pick_file()
-                                    {
-                                        machine.load_rom(path.clone());
-                                        if let Ok(mut text) = rom_name.single_mut() {
-                                            **text = path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string();
-                                        }
+                                        .pick_file() else {
+                                            fatal_error(&mut next_state, &mut commands, "couldn't load ROM file path".to_string());
+                                            return;
+                                    };
+                                    if let Ok(mut text) = rom_name.single_mut() {
+                                        let Some(path_text) = path.file_name().and_then(|n| n.to_str()) else {
+                                            fatal_error(&mut next_state, &mut commands, "couldn't read ROM file name".to_string());
+                                            return;
+                                        };
+                                        **text = path_text.to_string();
+                                    }
+                                    if machine.load_rom(path.clone(), &mut next_state, commands, &mut display, &mut images) {
                                         next_state.set(SimState::Executing);
                                     }
                                 });

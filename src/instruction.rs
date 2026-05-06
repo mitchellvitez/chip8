@@ -1,14 +1,15 @@
-use std::collections::VecDeque;
-
-use crate::FatalError;
+use crate::LastState;
 use crate::SimState;
+use crate::constant::*;
+use crate::error::fatal_error;
+use crate::keyboard::RegisterAwaitingKeyInput;
 use crate::keyboard::key_to_keycode;
 use crate::machine::Machine;
 use crate::ui::Display;
-use crate::{RegisterAwaitingKeyInput, constant::*};
 use bevy::prelude::*;
 use bevy::render::render_resource::Extent3d;
 use rand::random;
+use std::collections::VecDeque;
 
 #[derive(Copy, Clone)]
 enum Instruction {
@@ -48,7 +49,7 @@ enum Instruction {
     LdMemReg { x: u8 },
     LdRegMem { x: u8 },
 
-    // SuperChip extension
+    // Super-Chip extension
     ScrDwn { n: u8 },
     ScrRgt4,
     ScrLft4,
@@ -118,7 +119,7 @@ fn decode(opcode: u16) -> Option<Instruction> {
         (0xF, _, 0x5, 0x5) => Some(Instruction::LdMemReg { x }),
         (0xF, _, 0x6, 0x5) => Some(Instruction::LdRegMem { x }),
 
-        // SuperChip extension
+        // Super-Chip extension
         (0x0, 0x0, 0xC, _) => Some(Instruction::ScrDwn { n }),
         (0x0, 0x0, 0xF, 0xB) => Some(Instruction::ScrRgt4),
         (0x0, 0x0, 0xF, 0xC) => Some(Instruction::ScrLft4),
@@ -172,7 +173,7 @@ fn instruction_to_string(instruction: Instruction) -> String {
         Instruction::LdMemReg { x } => format!("LD [I], V{:01X}", x),
         Instruction::LdRegMem { x } => format!("LD V{:01X}, [I]", x),
 
-        // SuperChip extension
+        // Super-Chip extension
         Instruction::ScrDwn { n } => format!("SCRD 0x{:01X}", n),
         Instruction::ScrRgt4 => "SCRR4".to_string(),
         Instruction::ScrLft4 => "SCRL4".to_string(),
@@ -185,11 +186,7 @@ fn instruction_to_string(instruction: Instruction) -> String {
     }
 }
 
-fn fatal_error(next_state: &mut NextState<SimState>, commands: &mut Commands, message: String) {
-    next_state.set(SimState::Errored);
-    commands.insert_resource(FatalError { message });
-}
-
+#[allow(clippy::too_many_arguments)]
 pub fn execute_frame_cycles(
     keys: Res<ButtonInput<KeyCode>>,
     mut machine: ResMut<Machine>,
@@ -198,6 +195,8 @@ pub fn execute_frame_cycles(
     mut images: ResMut<Assets<Image>>,
     mut commands: Commands,
     mut queue: ResMut<RecentInstructions>,
+    state: Res<State<SimState>>,
+    mut last_state: ResMut<LastState>,
 ) {
     let Some(display_image) = images.get_mut(&display.handle) else {
         return;
@@ -210,6 +209,8 @@ pub fn execute_frame_cycles(
             display_image,
             &mut commands,
             &mut queue,
+            *state.get(),
+            &mut last_state,
         ) {
             break;
         }
@@ -218,6 +219,7 @@ pub fn execute_frame_cycles(
 
 /// executes a single instruction and puts the machine in the right state to execute the next one
 /// returns true if we should keep processing cycles, and false if we should stop
+#[allow(clippy::too_many_arguments)]
 pub fn execute(
     keys: &ButtonInput<KeyCode>,
     machine: &mut Machine,
@@ -225,6 +227,8 @@ pub fn execute(
     display_image: &mut Image,
     commands: &mut Commands,
     queue: &mut RecentInstructions,
+    state: SimState,
+    last_state: &mut LastState,
 ) -> bool {
     if keys.just_pressed(KeyCode::KeyP) {
         next_state.set(SimState::Stepping);
@@ -273,9 +277,12 @@ pub fn execute(
         Instruction::Ret => {
             let sp = machine.sp as usize;
             machine.stack[sp] = 0;
+            if machine.sp == 0 {
+                fatal_error(next_state, commands, "stack underflow".to_string());
+                return false;
+            }
             machine.sp -= 1;
             machine.pc = machine.stack[machine.sp as usize];
-            // TODO: fatal error on stack underflow
         }
         // Instruction::Sys { .. } => {} // no-op
         Instruction::Jp { addr } => {
@@ -449,6 +456,7 @@ pub fn execute(
         }
         Instruction::LdKey { x } => {
             commands.insert_resource(RegisterAwaitingKeyInput { register: x });
+            *last_state = LastState { last_state: state };
             next_state.set(SimState::WaitingForKey);
             return false;
         }
@@ -494,7 +502,7 @@ pub fn execute(
             machine.i += x as u16 + 1;
         }
 
-        ////////// SuperChip extension //////////
+        ////////// Super-Chip extension //////////
         Instruction::ScrDwn { n } => {
             let (width, height) = machine.get_display_resolution();
             let shift = n as usize * width;

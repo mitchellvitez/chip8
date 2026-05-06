@@ -1,6 +1,10 @@
 use crate::constant::*;
+use crate::error::fatal_error;
 use crate::keyboard::{key_big_sprite, key_sprite};
+use crate::ui::Display;
+use crate::SimState;
 use bevy::prelude::*;
+use bevy::render::render_resource::Extent3d;
 use std::fs;
 use std::path::PathBuf;
 
@@ -27,32 +31,68 @@ pub struct Machine {
     /// number of cycles since the machine started
     pub cycles: u32,
 
-    // SuperChip extension
-    /// registers that mirror the existing registers but aren't wiped by a machine.reset()
+    // Super-Chip extension
+    /// registers that can store from/load to existing registers
+    /// but aren't wiped by a machine reset
     pub cross_program_registers: [u8; NUM_CROSS_PROGRAM_REGISTERS],
     pub hi_res_display: bool,
 }
 
-pub fn load_default_rom(mut machine: ResMut<Machine>) {
-    let rom = fs::read("roms/startup.ch8").expect("failed to read ROM file");
-    machine.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
-        .copy_from_slice(&rom);
+pub fn load_default_rom(
+    mut machine: ResMut<Machine>,
+    mut next_state: ResMut<NextState<SimState>>,
+    commands: Commands,
+    mut display: ResMut<Display>,
+    mut images: ResMut<Assets<Image>>,
+) {
+    machine.load_rom(
+        PathBuf::from("roms/startup.ch8"),
+        &mut next_state,
+        commands,
+        &mut display,
+        &mut images,
+    );
 }
 
 impl Machine {
-    fn reset(&mut self) {
+    pub fn load_rom(
+        &mut self,
+        path: PathBuf,
+        next_state: &mut NextState<SimState>,
+        mut commands: Commands,
+        display: &mut Display,
+        images: &mut Assets<Image>,
+    ) -> bool {
+        let Ok(rom) = fs::read(path) else {
+            fatal_error(
+                next_state,
+                &mut commands,
+                "couldn't read ROM file".to_string(),
+            );
+            return false;
+        };
+        if PROGRAM_START_ADDRESS as usize + rom.len() >= RAM_SIZE {
+            fatal_error(
+                next_state,
+                &mut commands,
+                "ROM too large to fit in RAM".to_string(),
+            );
+            return false;
+        }
         let saved_registers = self.cross_program_registers;
         *self = Self::default();
         self.cross_program_registers = saved_registers;
-    }
-
-    pub fn load_rom(&mut self, path: PathBuf) {
-        self.reset();
-        // TODO: convert `expect` into `fatal_error`
-        // TODO: if ROM too large to fit in RAM, enter error state
-        let rom = fs::read(path).expect("failed to read ROM file");
         self.memory[PROGRAM_START_ADDRESS as usize..PROGRAM_START_ADDRESS as usize + rom.len()]
             .copy_from_slice(&rom);
+        let Some(display_image) = images.get_mut(&display.handle) else {
+            return false;
+        };
+        display_image.resize(Extent3d {
+            width: LO_RES_DISPLAY_WIDTH as u32,
+            height: LO_RES_DISPLAY_HEIGHT as u32,
+            depth_or_array_layers: 1,
+        });
+        true
     }
 
     pub fn get_display_resolution(&self) -> (usize, usize) {
