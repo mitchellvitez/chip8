@@ -253,6 +253,16 @@ pub fn execute_frame_cycles(
     }
 }
 
+pub fn skip_long_opcodes(machine: &mut Machine) {
+     let opcode = u16::from_be_bytes([
+         machine.memory[machine.pc as usize],
+         machine.memory[machine.pc as usize + 1],
+     ]);
+     if opcode == 0xF000 {
+         machine.pc += 2;
+     }
+}
+
 /// executes a single instruction and puts the machine in the right state to execute the next one
 /// returns true if we should keep processing cycles, and false if we should stop
 #[allow(clippy::too_many_arguments)]
@@ -270,7 +280,7 @@ pub fn execute(
         next_state.set(SimState::Stepping);
     }
 
-    if machine.pc as usize >= RAM_SIZE {
+    if machine.pc as usize >= EXTENDED_RAM_SIZE {
         fatal_error(
             next_state,
             commands,
@@ -304,10 +314,19 @@ pub fn execute(
 
     match instruction {
         Instruction::Cls => {
-            if machine.hi_res_display {
-                machine.display = vec![false; HI_RES_DISPLAY_WIDTH * HI_RES_DISPLAY_HEIGHT]
-            } else {
-                machine.display = vec![false; LO_RES_DISPLAY_WIDTH * LO_RES_DISPLAY_HEIGHT]
+            let (width, height) = machine.get_display_resolution();
+            for x in 0..width {
+                for y in 0..height {
+                    let index = y * width + x;
+                    let (val1, val2) = machine.display[index];
+                    machine.display[index] =
+                        match (machine.drawing_plane_one, machine.drawing_plane_two) {
+                            (true, true) => (false, false),
+                            (true, false) => (false, val2),
+                            (false, true) => (val1, false),
+                            (false, false) => (val1, val2),
+                        };
+                }
             }
         }
         Instruction::Ret => {
@@ -343,16 +362,19 @@ pub fn execute(
         Instruction::SeByte { x, byte } => {
             if machine.registers[x as usize] == byte {
                 machine.pc += 2;
+                skip_long_opcodes(machine);
             }
         }
         Instruction::SneByte { x, byte } => {
             if machine.registers[x as usize] != byte {
                 machine.pc += 2;
+                skip_long_opcodes(machine);
             }
         }
         Instruction::Se { x, y } => {
             if machine.registers[x as usize] == machine.registers[y as usize] {
                 machine.pc += 2;
+                skip_long_opcodes(machine);
             }
         }
         Instruction::LdByte { x, byte } => {
@@ -417,6 +439,7 @@ pub fn execute(
         Instruction::Sne { x, y } => {
             if machine.registers[x as usize] != machine.registers[y as usize] {
                 machine.pc += 2;
+                skip_long_opcodes(machine);
             }
         }
         Instruction::LdAddr { addr } => {
@@ -463,10 +486,18 @@ pub fn execute(
                             break;
                         }
                         let index = py * display_width + px;
-                        if machine.display[index] {
-                            pixel_flipped = 1;
+                        if machine.drawing_plane_one {
+                            if machine.display[index].0 {
+                                pixel_flipped = 1;
+                            }
+                            machine.display[index].0 ^= true;
                         }
-                        machine.display[index] ^= true;
+                        if machine.drawing_plane_two {
+                            if machine.display[index].1 {
+                                pixel_flipped = 1;
+                            }
+                            machine.display[index].1 ^= true;
+                        }
                     }
                 }
             }
@@ -477,14 +508,16 @@ pub fn execute(
             if let Some(keycode) = key_to_keycode(machine.registers[x as usize])
                 && keys.pressed(keycode)
             {
-                machine.pc += 2
+                machine.pc += 2;
+                skip_long_opcodes(machine);
             }
         }
         Instruction::Sknp { x } => {
             if let Some(keycode) = key_to_keycode(machine.registers[x as usize])
                 && !keys.pressed(keycode)
             {
-                machine.pc += 2
+                machine.pc += 2;
+                skip_long_opcodes(machine);
             }
         }
         Instruction::LdVxDt { x } => {
@@ -545,7 +578,7 @@ pub fn execute(
             machine
                 .display
                 .copy_within(0..width * height - shift, shift);
-            machine.display[0..shift].fill(false);
+            machine.display[0..shift].fill((false, false));
         }
         Instruction::ScrRgt4 => {
             let (width, height) = machine.get_display_resolution();
@@ -554,7 +587,7 @@ pub fn execute(
                 let end = start + width;
                 let row_slice = &mut machine.display[start..end];
                 row_slice.copy_within(0..width - 4, 4);
-                row_slice[0..4].fill(false);
+                row_slice[0..4].fill((false, false));
             }
         }
         Instruction::ScrLft4 => {
@@ -564,7 +597,7 @@ pub fn execute(
                 let end = start + width;
                 let row_slice = &mut machine.display[start..end];
                 row_slice.copy_within(4..width, 0);
-                row_slice[width - 4..].fill(false);
+                row_slice[width - 4..].fill((false, false));
             }
         }
         Instruction::Exit => {
@@ -573,7 +606,7 @@ pub fn execute(
         }
         Instruction::HiRes => {
             machine.hi_res_display = true;
-            machine.display = vec![false; HI_RES_DISPLAY_WIDTH * HI_RES_DISPLAY_HEIGHT];
+            machine.display = vec![(false, false); HI_RES_DISPLAY_WIDTH * HI_RES_DISPLAY_HEIGHT];
             display_image.resize(Extent3d {
                 width: HI_RES_DISPLAY_WIDTH as u32,
                 height: HI_RES_DISPLAY_HEIGHT as u32,
@@ -582,7 +615,7 @@ pub fn execute(
         }
         Instruction::LoRes => {
             machine.hi_res_display = false;
-            machine.display = vec![false; LO_RES_DISPLAY_WIDTH * LO_RES_DISPLAY_HEIGHT];
+            machine.display = vec![(false, false); LO_RES_DISPLAY_WIDTH * LO_RES_DISPLAY_HEIGHT];
             display_image.resize(Extent3d {
                 width: LO_RES_DISPLAY_WIDTH as u32,
                 height: LO_RES_DISPLAY_HEIGHT as u32,
@@ -657,13 +690,14 @@ pub fn execute(
         Instruction::Ptch { x} => {
             machine.pitch_register = machine.registers[x as usize];
         },
+        // TODO: the four scroll instructions need to be drawing-plane-specific
         Instruction::ScrUp { n } => {
             let (width, height) = machine.get_display_resolution();
             let shift = n as usize * width;
             machine
                 .display
                 .copy_within(shift .. width * height, 0);
-            machine.display[width * height - shift ..].fill(false);
+            machine.display[width * height - shift ..].fill((false, false));
         }
     }
     true

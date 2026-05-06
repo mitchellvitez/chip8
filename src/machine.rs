@@ -25,9 +25,9 @@ pub struct Machine {
     /// fixed-size stack containing addresses
     pub stack: [u16; STACK_SIZE],
     /// allocate RAM on the heap in case we want to make it huge later
-    pub memory: Box<[u8; RAM_SIZE]>,
+    pub memory: Box<[u8; EXTENDED_RAM_SIZE]>,
     /// monochrome display
-    pub display: Vec<bool>,
+    pub display: Vec<(bool, bool)>,
     /// number of cycles since the machine started
     pub cycles: u32,
 
@@ -52,7 +52,7 @@ pub fn load_default_rom(
     mut images: ResMut<Assets<Image>>,
 ) {
     machine.load_rom(
-        PathBuf::from("roms/startup.ch8"),
+        PathBuf::from("./roms/startup.ch8"),
         &mut next_state,
         commands,
         &mut display,
@@ -77,7 +77,7 @@ impl Machine {
             );
             return false;
         };
-        if PROGRAM_START_ADDRESS as usize + rom.len() >= RAM_SIZE {
+        if PROGRAM_START_ADDRESS as usize + rom.len() >= EXTENDED_RAM_SIZE {
             fatal_error(
                 next_state,
                 &mut commands,
@@ -124,8 +124,8 @@ impl Default for Machine {
             pc: PROGRAM_START_ADDRESS,
             sp: 0,
             stack: [0; STACK_SIZE],
-            memory: Box::new([0; RAM_SIZE]),
-            display: vec![false; LO_RES_DISPLAY_WIDTH * LO_RES_DISPLAY_HEIGHT],
+            memory: Box::new([0; EXTENDED_RAM_SIZE]),
+            display: vec![(false, false); LO_RES_DISPLAY_WIDTH * LO_RES_DISPLAY_HEIGHT],
             cycles: 0,
             cross_program_registers: [0; NUM_CROSS_PROGRAM_REGISTERS],
             hi_res_display: false,

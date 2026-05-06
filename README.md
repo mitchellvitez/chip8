@@ -1,5 +1,7 @@
 # Chip-8
 
+CHIP-8 is an interpreter/instruction set/specification/"fantasy console" often used as an introduction to video game console emulation, which is exactly what I'm doing here for myself.
+
 Built with Bevy and Rust
 
 <img width="1728" height="1084" alt="startup" src="https://github.com/user-attachments/assets/5b33de17-ee92-44bd-83db-893d0cbb2500" />
@@ -20,12 +22,18 @@ Built with Bevy and Rust
   - two display resolutions
   - bigger sprites
   - cross-program registers
+- XO-Chip extension
+  - audio pattern buffer
+  - variable pitch
+  - drawing planes
+  - extended memory loads (64k of RAM)
 - plus several extras and a full UI
+  - autoplays `startup.ch8` ROM on start
   - single-step and continuous execution modes
   - shows running instructions in the UI, disassembled on the fly
   - filepicker button to load new ROMs
   - tracks cycle count for each running ROM
-  - exposes every bit of the virtual machine's memory via UI—all registers, the entire stack, timers, pseudo-registers, and all of RAM
+  - exposes every bit of the (original Chip-8 spec) virtual machine's memory via UI—all registers, the entire stack, timers, pseudo-registers, and all of RAM
   - error handling
  
 <img width="1728" height="1084" alt="maze" src="https://github.com/user-attachments/assets/c28e6660-369a-4dfc-a1f0-c671eba2741b" />

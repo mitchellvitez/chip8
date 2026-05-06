@@ -16,3 +16,6 @@ pub const HI_RES_DISPLAY_WIDTH: usize = 128;
 pub const HI_RES_DISPLAY_HEIGHT: usize = 64;
 pub const NUM_CROSS_PROGRAM_REGISTERS: usize = 8;
 pub const BIG_FONT_START_ADDRESS: u16 = 0x50 + 5 * 16;
+
+// XO-Chip extension
+pub const EXTENDED_RAM_SIZE: usize = 65536; // 64k

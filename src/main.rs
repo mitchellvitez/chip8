@@ -18,8 +18,6 @@ mod keyboard;
 mod machine;
 mod ui;
 
-// TODO: support XO-chip extension
-
 fn main() {
     App::new()
         .add_plugins(DefaultPlugins.set(WindowPlugin {

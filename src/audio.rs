@@ -13,3 +13,5 @@ pub fn setup_audio(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
     ));
 }
+
+// TODO: play sounds out of the audio pattern buffer rather than a single tone file

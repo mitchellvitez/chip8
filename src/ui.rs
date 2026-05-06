@@ -1,7 +1,7 @@
 use crate::error::fatal_error;
 use crate::instruction::RecentInstructions;
 use crate::machine::Machine;
-use crate::{SimState, constant::*};
+use crate::{constant::*, SimState};
 use bevy::asset::RenderAssetUsages;
 use bevy::ecs::observer::On;
 use bevy::image::ImageSampler;
@@ -85,7 +85,11 @@ pub fn update_ui(
     for (i, pixel) in display_image_data.chunks_exact_mut(4).enumerate() {
         const BLACK: &[u8; 4] = &[0, 0, 0, 255];
         const WHITE: &[u8; 4] = &[255, 255, 255, 255];
-        let pixel_color = if !machine.display[i] { BLACK } else { WHITE };
+        let pixel_color = if machine.display[i].0 || machine.display[i].1 {
+            WHITE
+        } else {
+            BLACK
+        };
         pixel.copy_from_slice(pixel_color);
     }
 
